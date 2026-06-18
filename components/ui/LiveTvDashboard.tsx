@@ -325,7 +325,7 @@ export default function LiveTvDashboard() {
               </div>
             </div>
 
-            <div className="p-4 grid grid-cols-3 gap-4 overflow-hidden">
+            <div className="p-4 grid grid-cols-3 gap-4 overflow-y-auto">
               <Card title="GOLES ESPERADOS (xG)">
                 {!hasStats ? (
                   <div className="h-full flex items-center justify-center text-white/40 text-sm text-center">
@@ -405,23 +405,25 @@ export default function LiveTvDashboard() {
                 </div>
               </Card>
 
-    <Card title="AMBOS MARCAN (BTTS)">
+<Card title="AMBOS ANOTAN (BTTS)">
   <div className="grid grid-cols-2 mt-8 text-center">
     <div>
       <div className="text-white/60">SÍ</div>
       <div className="text-3xl font-black text-green-400">
-        {prediction?.bttsYes ?? 0}%
+        {(prediction as any)?.bttsYes ?? (prediction as any)?.btts ?? 0}%
       </div>
     </div>
 
     <div>
       <div className="text-white/60">NO</div>
       <div className="text-3xl font-black text-red-400">
-        {prediction?.bttsNo ?? 0}%
+        {(prediction as any)?.bttsNo ??
+          100 - ((prediction as any)?.btts ?? 0)}
+        %
       </div>
     </div>
   </div>
-              </Card>
+</Card>
             </div>
           </section>
 
