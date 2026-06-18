@@ -405,17 +405,22 @@ export default function LiveTvDashboard() {
                 </div>
               </Card>
 
-              <Card title="AMBOS ANOTAN (BTTS)">
-                <div className="grid grid-cols-2 mt-8 text-center">
-                  <div>
-                    <div className="text-white/60">SÍ</div>
-                    <div className="text-3xl font-black">{prediction?.btts ?? 0}%</div>
-                  </div>
-                  <div>
-                    <div className="text-white/60">NO</div>
-                    <div className="text-3xl font-black">{100 - (prediction?.btts ?? 0)}%</div>
-                  </div>
-                </div>
+    <Card title="AMBOS MARCAN (BTTS)">
+  <div className="grid grid-cols-2 mt-8 text-center">
+    <div>
+      <div className="text-white/60">SÍ</div>
+      <div className="text-3xl font-black text-green-400">
+        {prediction?.bttsYes ?? 0}%
+      </div>
+    </div>
+
+    <div>
+      <div className="text-white/60">NO</div>
+      <div className="text-3xl font-black text-red-400">
+        {prediction?.bttsNo ?? 0}%
+      </div>
+    </div>
+  </div>
               </Card>
             </div>
           </section>

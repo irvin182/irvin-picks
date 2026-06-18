@@ -19,7 +19,8 @@ export type LivePoissonResult = {
   over25: number;
   over35: number;
 
-  btts: number;
+  bttsYes: number;
+  bttsNo: number;
 
   nextGoalHome: number;
   nextGoalDraw: number;
@@ -222,7 +223,8 @@ export function calculateLivePoisson(input: LivePoissonInput): LivePoissonResult
       ? 48 + Math.round(Math.min(homePressure, awayPressure) * 4)
       : 35 + Math.round(Math.min(homePressure, awayPressure) * 3);
 
-  const btts = clamp(bttsBase, 8, 94);
+  const bttsYes = clamp(bttsBase, 8, 94);
+  const bttsNo = 100 - bttsYes;
 
   const nextGoalHome = clamp(Math.round(homeStrength * 70 + 10), 5, 80);
   const nextGoalAway = clamp(Math.round(awayStrength * 70 + 10), 5, 80);
@@ -297,7 +299,7 @@ export function calculateLivePoisson(input: LivePoissonInput): LivePoissonResult
   irvinScore += over25 * 0.1;
   irvinScore += over35 * 0.06;
   irvinScore += Math.max(nextGoalHome, nextGoalAway) * 0.08;
-  irvinScore += btts * 0.05;
+  irvinScore += bttsYes * 0.05;
   irvinScore += dangerIndex * 0.14;
   irvinScore += Math.min(currentGoals, 5) * 3;
 
@@ -343,7 +345,7 @@ export function calculateLivePoisson(input: LivePoissonInput): LivePoissonResult
     aiDecisions.push("🔵 Próximo gol más probable: visitante.");
   }
 
-  if (btts >= 60) {
+  if (bttsYes >= 60) {
     aiDecisions.push("🟢 Ambos anotan tiene valor estadístico.");
   } else {
     aiDecisions.push("🔴 Ambos anotan no es fuerte ahora.");
@@ -375,7 +377,8 @@ export function calculateLivePoisson(input: LivePoissonInput): LivePoissonResult
     over15,
     over25,
     over35,
-    btts,
+    bttsYes,
+    bttsNo,
     nextGoalHome,
     nextGoalDraw,
     nextGoalAway,

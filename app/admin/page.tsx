@@ -663,4 +663,4 @@ function Card({ title, value }: { title: string; value: number }) {
       <p className="text-4xl font-black text-green-400 mt-2">{value}</p>
     </div>
   );
-}
+}   

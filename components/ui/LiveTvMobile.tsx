@@ -351,17 +351,37 @@ export default function LiveTvMobile() {
         </div>
       </section>
 
-      <section className="grid grid-cols-3 gap-2">
-        <Box title="1" value={`${prediction.homeWin}%`} />
-        <Box title="X" value={`${prediction.draw}%`} />
-        <Box title="2" value={`${prediction.awayWin}%`} />
-      </section>
 
-      <section className="grid grid-cols-3 gap-2">
-        <Box title="+1.5" value={`${prediction.over15}%`} />
-        <Box title="+2.5" value={`${prediction.over25}%`} />
-        <Box title="+3.5" value={`${prediction.over35}%`} />
-      </section>
+
+
+
+<section className="grid grid-cols-3 gap-2">
+  <Box title="1" value={`${prediction.homeWin}%`} />
+  <Box title="X" value={`${prediction.draw}%`} />
+  <Box title="2" value={`${prediction.awayWin}%`} />
+</section>
+
+<section className="grid grid-cols-3 gap-2">
+  <Box title="+1.5" value={`${prediction.over15}%`} />
+  <Box title="+2.5" value={`${prediction.over25}%`} />
+  <Box title="+3.5" value={`${prediction.over35}%`} />
+</section>
+
+<section className="grid grid-cols-2 gap-2">
+  <Box title="BTTS Sí" value={`${prediction.bttsYes}%`} />
+  <Box title="BTTS No" value={`${prediction.bttsNo}%`} />
+</section>
+
+<section className="grid grid-cols-3 gap-2">
+  <Box title="Gol Local" value={`${prediction.nextGoalHome}%`} />
+  <Box title="Sin Gol" value={`${prediction.nextGoalDraw}%`} />
+  <Box title="Gol Visitante" value={`${prediction.nextGoalAway}%`} />
+</section>
+
+
+
+
+
 
       <section className="rounded-3xl bg-[#07111c] border border-white/10 p-5 shadow-2xl">
         <div className="text-center">

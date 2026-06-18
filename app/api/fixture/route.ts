@@ -1,6 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getToken } from "next-auth/jwt";
-import { rateLimit, getClientIp } from "@/lib/security";
 
 type CacheValue = {
   data: any;
@@ -10,32 +8,7 @@ type CacheValue = {
 const CACHE_TIME = 60000;
 const cache = new Map<string, CacheValue>();
 
-async function isAllowed(req: NextRequest) {
-  const token = await getToken({
-    req,
-    secret: process.env.NEXTAUTH_SECRET,
-  });
-
-  if (!token) return false;
-  if ((token as any).blocked) return false;
-
-  return true;
-}
-
 export async function GET(req: NextRequest) {
-  const ip = getClientIp(req);
-const limited = rateLimit(`fixture:${ip}`, 120, 60_000);
-
-if (!limited.ok) {
-  return NextResponse.json(
-    { error: "Demasiadas peticiones. Intenta de nuevo en un momento." },
-    { status: 429 }
-  );
-}
-  if (!(await isAllowed(req))) {
-    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-  }
-
   const API_KEY = process.env.APIFOOTBALL_KEY;
 
   if (!API_KEY) {
@@ -88,13 +61,17 @@ if (!limited.ok) {
       ),
     ]);
 
-    const statistics = await statisticsRes.json();
-    const events = await eventsRes.json();
+    const statisticsJson = await statisticsRes.json();
+    const eventsJson = await eventsRes.json();
 
     const payload = {
       fixtureId,
-      statistics: statistics.response ?? [],
-      events: events.response ?? [],
+      statistics: Array.isArray(statisticsJson?.response)
+        ? statisticsJson.response
+        : [],
+      events: Array.isArray(eventsJson?.response) ? eventsJson.response : [],
+      rawStatisticsErrors: statisticsJson?.errors ?? null,
+      rawEventsErrors: eventsJson?.errors ?? null,
       cached: false,
       cachedAt: now,
     };
@@ -115,8 +92,13 @@ if (!limited.ok) {
     }
 
     return NextResponse.json(
-      { error: "Error cargando detalles del partido" },
-      { status: 500 }
+      {
+        fixtureId,
+        statistics: [],
+        events: [],
+        error: "Error cargando detalles del partido",
+      },
+      { status: 200 }
     );
   }
 }
