@@ -1,0 +1,1040 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+}
+
+@layer base {
+  * {
+    outline-color: var(--ring);
+  }
+
+  body {
+    background: var(--background);
+    color: var(--foreground);
+  }
+}
+
+/* ================= PRINT PRO IRVIN ================= */
+
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 8mm;
+  }
+
+  html,
+  body {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  * {
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  .no-print,
+  .print-hidden,
+  .print\:hidden,
+  button,
+  input,
+  label {
+    display: none !important;
+  }
+
+  .pdf-analysis-only,
+  .pdf-live-only {
+    display: none !important;
+  }
+
+
+
+  .pdf-analysis .screen-view {
+  display: none !important;
+}
+
+.pdf-live .screen-view {
+  display: block !important;
+}
+
+.pdf-live .pdf-analysis-only {
+  display: none !important;
+}
+
+.pdf-live {
+  background: #050505 !important;
+  color: white !important;
+}
+
+.pdf-live .screen-live-card {
+  display: block !important;
+  break-inside: avoid !important;
+  page-break-inside: avoid !important;
+}
+  img,
+  svg,
+  canvas {
+    max-width: 100% !important;
+  }
+
+  a {
+    text-decoration: none !important;
+  }
+
+  /* ================= PDF ANÁLISIS ================= */
+
+  .pdf-analysis {
+    background: #ffffff !important;
+    color: #020617 !important;
+  }
+
+  .pdf-analysis .screen-live-card,
+  .pdf-analysis .pdf-live-only {
+    display: none !important;
+  }
+
+  .pdf-analysis .pdf-analysis-only {
+    display: block !important;
+    background: #ffffff !important;
+    color: #020617 !important;
+  }
+
+  .pdf-analysis .pdf-analysis-only section,
+  .pdf-analysis .pdf-analysis-only div {
+    background: #ffffff !important;
+    color: #020617 !important;
+  }
+
+  .pdf-analysis header {
+    display: flex !important;
+    background: #ffffff !important;
+    color: #020617 !important;
+    border: 1px solid #dbeafe !important;
+    border-radius: 10px !important;
+    padding: 8px 12px !important;
+    margin-bottom: 10px !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  .pdf-analysis h1,
+  .pdf-analysis h2,
+  .pdf-analysis h3,
+  .pdf-analysis p,
+  .pdf-analysis span,
+  .pdf-analysis strong {
+    color: #020617 !important;
+  }
+
+  .pdf-analysis table {
+    width: 100% !important;
+    table-layout: fixed !important;
+    border-collapse: collapse !important;
+    font-size: 7px !important;
+    background: #ffffff !important;
+  }
+
+  .pdf-analysis thead {
+    display: table-header-group !important;
+  }
+
+  .pdf-analysis th {
+    background: #0f172a !important;
+    color: #ffffff !important;
+    font-size: 8px !important;
+    font-weight: 900 !important;
+    text-transform: uppercase !important;
+  }
+
+  .pdf-analysis th,
+  .pdf-analysis td {
+    padding: 3px 4px !important;
+    border: 1px solid #e5e7eb !important;
+    text-align: center !important;
+  }
+
+  .pdf-analysis td {
+    background: #ffffff !important;
+    color: #020617 !important;
+    font-weight: 900 !important;
+  }
+
+  .pdf-analysis tbody tr:nth-child(even) td {
+    background: #f8fafc !important;
+  }
+
+  .pdf-analysis tr {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  .pdf-analysis td:nth-child(2) {
+    text-align: left !important;
+    font-size: 12px !important;
+    font-weight: 950 !important;
+  }
+
+  /* ================= PDF EN VIVO ================= */
+
+  .pdf-live {
+    background: #050505 !important;
+    color: #ffffff !important;
+  }
+
+  .pdf-live .pdf-analysis-only,
+  .pdf-live .pdf-live-only {
+    display: none !important;
+  }
+
+
+
+
+
+  .pdf-live .screen-live-card {
+    display: block !important;
+    background: #050505 !important;
+    color: #ffffff !important;
+    border-color: rgba(255, 255, 255, 0.12) !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  .pdf-live .screen-live-card * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+
+  .pdf-live .bg-black\/60 {
+    background: rgba(0, 0, 0, 0.6) !important;
+  }
+
+  .pdf-live .bg-zinc-800,
+  .pdf-live .bg-zinc-900,
+  .pdf-live .bg-zinc-950,
+  .pdf-live .bg-neutral-900 {
+    background: #171717 !important;
+  }
+
+  .pdf-live .bg-amber-400,
+  .pdf-live .bg-yellow-400 {
+    background: #facc15 !important;
+    color: #000000 !important;
+  }
+
+  .pdf-live .bg-cyan-400,
+  .pdf-live .bg-cyan-500 {
+    background: #06b6d4 !important;
+    color: #000000 !important;
+  }
+
+  .pdf-live .bg-emerald-400,
+  .pdf-live .bg-emerald-500 {
+    background: #22c55e !important;
+    color: #000000 !important;
+  }
+
+  .pdf-live .text-white {
+    color: #ffffff !important;
+  }
+
+  .pdf-live .text-black {
+    color: #000000 !important;
+  }
+
+  .pdf-live .text-zinc-300,
+  .pdf-live .text-zinc-400,
+  .pdf-live .text-zinc-500 {
+    color: #a1a1aa !important;
+  }
+
+  .pdf-live .text-yellow-400,
+  .pdf-live .text-amber-400 {
+    color: #facc15 !important;
+  }
+
+  .pdf-live .text-cyan-400 {
+    color: #22d3ee !important;
+  }
+
+  .pdf-live .text-emerald-400 {
+    color: #34d399 !important;
+  }
+
+  .pdf-live .border-white\/10 {
+    border-color: rgba(255, 255, 255, 0.1) !important;
+  }
+
+  .pdf-live .border-white\/20 {
+    border-color: rgba(255, 255, 255, 0.2) !important;
+  }
+}
+
+
+.pdf-live .pdf-analysis-only {
+  display: none !important;
+}
+
+.pdf-live .screen-live-card {
+  display: block !important;
+  background: #050505 !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(255,255,255,0.15) !important;
+  margin-bottom: 12px !important;
+  padding: 14px !important;
+  break-inside: avoid !important;
+  page-break-inside: avoid !important;
+}
+
+.pdf-live .screen-live-card * {
+  color: inherit;
+}
+
+.pdf-live .screen-live-card .text-white {
+  color: #ffffff !important;
+}
+
+.pdf-live .screen-live-card .text-zinc-400 {
+  color: #a1a1aa !important;
+}
+
+.pdf-live .screen-live-card .text-yellow-400,
+.pdf-live .screen-live-card .text-amber-400 {
+  color: #facc15 !important;
+}
+
+.pdf-live .screen-live-card .text-cyan-400 {
+  color: #22d3ee !important;
+}
+
+.pdf-live .screen-live-card .text-emerald-400 {
+  color: #34d399 !important;
+}
+
+@media print {
+  .pdf-live table,
+  .pdf-live thead,
+  .pdf-live tbody,
+  .pdf-live tr,
+  .pdf-live th,
+  .pdf-live td,
+  .pdf-live .pdf-analysis-only,
+  .pdf-live .overflow-x-auto {
+    display: none !important;
+  }
+
+  .pdf-live .screen-view,
+  .pdf-live .screen-live-card {
+    display: block !important;
+  }
+
+  .pdf-live .screen-live-card {
+    background: #050505 !important;
+    color: white !important;
+    border: 1px solid rgba(255,255,255,0.18) !important;
+    border-radius: 18px !important;
+    padding: 14px !important;
+    margin-bottom: 14px !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  .pdf-live .screen-live-card * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}
+@media print {
+  .pdf-live .screen-view,
+  .pdf-live .screen-view.print\:hidden,
+  .pdf-live .screen-view .print\:hidden {
+    display: block !important;
+  }
+
+  .pdf-live .screen-live-card,
+  .pdf-live .screen-live-card * {
+    display: revert !important;
+    visibility: visible !important;
+  }
+
+  .pdf-live button,
+  .pdf-live input,
+  .pdf-live label,
+  .pdf-live .pdf-analysis-only {
+    display: none !important;
+  }
+
+  .pdf-live table {
+    display: none !important;
+  }
+
+  .pdf-live .screen-live-card {
+    display: block !important;
+    background: #050505 !important;
+    color: white !important;
+    border: 1px solid rgba(255,255,255,0.18) !important;
+    border-radius: 18px !important;
+    padding: 14px !important;
+    margin-bottom: 14px !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+}
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 5mm;
+  }
+
+  .pdf-live header,
+  .pdf-live .pdf-analysis-only,
+  .pdf-live button,
+  .pdf-live input,
+  .pdf-live label {
+    display: none !important;
+  }
+
+  .pdf-live .screen-view {
+    display: block !important;
+  }
+
+  .pdf-live .screen-live-card {
+    padding: 6px !important;
+    margin-bottom: 5px !important;
+    border-radius: 10px !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  .pdf-live .screen-live-card h2 {
+    font-size: 11px !important;
+    margin-bottom: 2px !important;
+  }
+
+  .pdf-live .screen-live-card p,
+  .pdf-live .screen-live-card span,
+  .pdf-live .screen-live-card div {
+    font-size: 8px !important;
+    line-height: 1.1 !important;
+  }
+
+  .pdf-live .screen-live-card .text-lg,
+  .pdf-live .screen-live-card .text-xl,
+  .pdf-live .screen-live-card .text-2xl {
+    font-size: 12px !important;
+  }
+
+  .pdf-live .screen-live-card .text-sm {
+    font-size: 8px !important;
+  }
+
+  .pdf-live .screen-live-card .text-xs {
+    font-size: 7px !important;
+  }
+
+  .pdf-live .screen-live-card .grid {
+    gap: 3px !important;
+  }
+
+  .pdf-live .screen-live-card [class*="p-"] {
+    padding: 4px !important;
+  }
+
+  .pdf-live .screen-live-card [class*="gap-"] {
+    gap: 3px !important;
+  }
+
+  .pdf-live .screen-live-card [class*="rounded"] {
+    border-radius: 7px !important;
+  }
+}
+@media print {
+  .pdf-live {
+    background: #050505 !important;
+    color: white !important;
+  }
+
+  .pdf-live .screen-view {
+    display: block !important;
+  }
+
+  .pdf-live .screen-live-card {
+    padding: 5px !important;
+    margin-bottom: 4px !important;
+    border-radius: 8px !important;
+    border: 1px solid rgba(255,255,255,.16) !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  .pdf-live .screen-live-card > div {
+    gap: 4px !important;
+  }
+
+  .pdf-live .screen-live-card p,
+  .pdf-live .screen-live-card span,
+  .pdf-live .screen-live-card div {
+    font-size: 7px !important;
+    line-height: 1.05 !important;
+  }
+
+  .pdf-live .screen-live-card .text-lg,
+  .pdf-live .screen-live-card .text-xl,
+  .pdf-live .screen-live-card .text-2xl {
+    font-size: 10px !important;
+    line-height: 1.05 !important;
+  }
+
+  .pdf-live .screen-live-card .font-black,
+  .pdf-live .screen-live-card .font-bold {
+    font-weight: 800 !important;
+  }
+
+  .pdf-live .screen-live-card [class*="p-"] {
+    padding: 3px !important;
+  }
+
+  .pdf-live .screen-live-card [class*="py-"] {
+    padding-top: 2px !important;
+    padding-bottom: 2px !important;
+  }
+
+  .pdf-live .screen-live-card [class*="px-"] {
+    padding-left: 3px !important;
+    padding-right: 3px !important;
+  }
+
+  .pdf-live .screen-live-card [class*="gap-"] {
+    gap: 3px !important;
+  }
+
+  .pdf-live .screen-live-card [class*="rounded"] {
+    border-radius: 6px !important;
+  }
+
+  .pdf-live .screen-live-card .grid {
+    gap: 3px !important;
+  }
+
+  .pdf-live button,
+  .pdf-live input,
+  .pdf-live label,
+  .pdf-live .pdf-analysis-only {
+    display: none !important;
+  }
+}
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 8mm;
+  }
+
+  body {
+    background: white !important;
+    color: black !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  header {
+    padding: 6px 10px !important;
+    margin-bottom: 6px !important;
+    background: black !important;
+    color: white !important;
+  }
+
+  header img {
+    width: 38px !important;
+    height: 38px !important;
+  }
+
+  header h1 {
+    font-size: 22px !important;
+    line-height: 1.1 !important;
+  }
+
+  .print\:hidden,
+  .no-print,
+  .screen-view {
+    display: none !important;
+  }
+
+  .print\:block {
+    display: block !important;
+  }
+
+  main {
+    background: white !important;
+    color: black !important;
+    padding: 0 !important;
+  }
+
+  section {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    margin-bottom: 8px !important;
+  }
+
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    font-size: 7px !important;
+    table-layout: fixed !important;
+  }
+
+  th {
+    background: #020617 !important;
+    color: white !important;
+    font-size: 6.5px !important;
+    padding: 3px !important;
+  }
+
+  td {
+    padding: 3px !important;
+    font-size: 7px !important;
+    line-height: 1.15 !important;
+  }
+
+  td,
+  th {
+    border: 1px solid #d1d5db !important;
+  }
+
+  .pdf-analysis section {
+    display: block !important;
+  }
+
+  .pdf-live section {
+    display: block !important;
+  }
+}
+@media print {
+  * {
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+  }
+
+  .rounded-xl,
+  .rounded-2xl {
+    border-radius: 0 !important;
+  }
+}
+
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 8mm;
+  }
+
+  body {
+    background: white !important;
+    color: #0f172a !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .no-print,
+  .print\:hidden,
+  .screen-view {
+    display: none !important;
+  }
+
+  .pdf-report {
+    display: block !important;
+    background: white !important;
+    color: #0f172a !important;
+    font-family: Arial, sans-serif !important;
+  }
+
+  .pdf-page {
+    background: white !important;
+    border: 1px solid #dbe3ef !important;
+    border-radius: 12px !important;
+    padding: 12px !important;
+    margin-bottom: 10px !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  .pdf-header {
+    display: flex !important;
+    align-items: center !important;
+    gap: 12px !important;
+    border: 1px solid #dbe3ef !important;
+    border-radius: 12px !important;
+    padding: 10px !important;
+    margin-bottom: 10px !important;
+  }
+
+  .pdf-header img {
+    width: 55px !important;
+    height: 55px !important;
+    border-radius: 10px !important;
+  }
+
+  .pdf-title {
+    font-size: 22px !important;
+    font-weight: 900 !important;
+    margin: 0 !important;
+    color: #0f172a !important;
+  }
+
+  .pdf-subtitle {
+    font-size: 10px !important;
+    color: #334155 !important;
+    margin-top: 2px !important;
+  }
+
+  .pdf-league-title {
+    font-size: 13px !important;
+    font-weight: 900 !important;
+    color: #0f172a !important;
+    margin-bottom: 2px !important;
+  }
+
+  .pdf-league-meta {
+    font-size: 9px !important;
+    color: #475569 !important;
+    margin-bottom: 8px !important;
+  }
+
+  .pdf-table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    table-layout: fixed !important;
+    font-size: 8px !important;
+  }
+
+  .pdf-table th {
+    background: #020617 !important;
+    color: white !important;
+    padding: 4px !important;
+    border: 1px solid #cbd5e1 !important;
+    font-size: 7px !important;
+    text-transform: uppercase !important;
+  }
+
+  .pdf-table td {
+    border: 1px solid #dbe3ef !important;
+    padding: 4px !important;
+    color: #0f172a !important;
+    background: white !important;
+    font-size: 8px !important;
+    line-height: 1.15 !important;
+  }
+
+  .pdf-table tr:nth-child(even) td {
+    background: #f8fafc !important;
+  }
+
+  .pdf-pick {
+    display: inline-block !important;
+    border-radius: 999px !important;
+    padding: 2px 6px !important;
+    font-size: 7px !important;
+    font-weight: 900 !important;
+  }
+
+  .pdf-pick-green {
+    background: #86efac !important;
+    color: #14532d !important;
+  }
+
+  .pdf-pick-yellow {
+    background: #fde68a !important;
+    color: #78350f !important;
+  }
+
+  .pdf-pick-red {
+    background: #e5e7eb !important;
+    color: #374151 !important;
+  }
+}
+@media print {
+
+  /* SOLO afecta al modo LIVE */
+  .pdf-live {
+
+    /* 🔥 compacta todo */
+    padding: 4px !important;
+  }
+
+  .pdf-live .screen-live-card {
+
+    /* 🔥 elimina huecos grandes */
+    margin-bottom: 6px !important;
+
+    /* 🔥 evita cortes feos */
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+
+    /* 🔥 compacta tamaño */
+    padding: 6px !important;
+
+    /* 🔥 quita tamaños exagerados */
+    min-height: auto !important;
+  }
+
+  /* 🔥 textos más pequeños para que quepa más */
+  .pdf-live .screen-live-card * {
+    font-size: 8px !important;
+    line-height: 1.1 !important;
+  }
+
+  /* 🔥 títulos un poco más grandes */
+  .pdf-live .screen-live-card h2 {
+    font-size: 11px !important;
+  }
+
+  /* 🔥 grids más compactos */
+  .pdf-live .grid {
+    gap: 4px !important;
+  }
+
+  /* 🔥 elimina posibles espacios fantasma */
+  .pdf-live section {
+    margin-bottom: 4px !important;
+  }
+
+}
+/* =========================================================
+   PDF EN VIVO PRO — SOLO LIVE, NO TOCA PDF ANÁLISIS
+========================================================= */
+
+@media print {
+  .pdf-live {
+    background: #050505 !important;
+    color: #ffffff !important;
+    padding: 4px !important;
+  }
+
+  .pdf-live .pdf-analysis-only,
+  .pdf-live table,
+  .pdf-live button,
+  .pdf-live input,
+  .pdf-live label {
+    display: none !important;
+  }
+
+  .pdf-live .screen-view {
+    display: block !important;
+  }
+
+  .pdf-live section {
+    background: #050505 !important;
+    color: #ffffff !important;
+    border: 1px solid rgba(255,255,255,0.18) !important;
+    border-radius: 12px !important;
+    padding: 8px !important;
+    margin-bottom: 8px !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  .pdf-live .screen-live-card {
+    background: #0b0b0f !important;
+    color: #ffffff !important;
+    border: 1px solid rgba(255,255,255,0.16) !important;
+    border-radius: 12px !important;
+    padding: 7px !important;
+    margin-bottom: 6px !important;
+    min-height: auto !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  .pdf-live .screen-live-card * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    line-height: 1.08 !important;
+  }
+
+  .pdf-live .screen-live-card h2 {
+    font-size: 11px !important;
+    font-weight: 900 !important;
+    margin-bottom: 3px !important;
+    color: #ffffff !important;
+  }
+
+  .pdf-live .screen-live-card p,
+  .pdf-live .screen-live-card span,
+  .pdf-live .screen-live-card div {
+    font-size: 7.5px !important;
+  }
+
+  .pdf-live .screen-live-card .text-lg,
+  .pdf-live .screen-live-card .text-xl,
+  .pdf-live .screen-live-card .text-2xl,
+  .pdf-live .screen-live-card .font-black {
+    font-size: 10px !important;
+    font-weight: 900 !important;
+  }
+
+  .pdf-live .grid {
+    gap: 3px !important;
+  }
+
+  .pdf-live [class*="p-"] {
+    padding: 3px !important;
+  }
+
+  .pdf-live [class*="py-"] {
+    padding-top: 2px !important;
+    padding-bottom: 2px !important;
+  }
+
+  .pdf-live [class*="px-"] {
+    padding-left: 3px !important;
+    padding-right: 3px !important;
+  }
+
+  .pdf-live [class*="rounded"] {
+    border-radius: 7px !important;
+  }
+
+  .pdf-live .bg-zinc-900,
+  .pdf-live .bg-zinc-950,
+  .pdf-live .bg-neutral-900 {
+    background: #15151a !important;
+  }
+
+  .pdf-live .bg-amber-500\/10,
+  .pdf-live .bg-yellow-500\/10 {
+    background: rgba(245, 158, 11, 0.28) !important;
+    border-color: rgba(245, 158, 11, 0.75) !important;
+  }
+
+  .pdf-live .bg-cyan-500\/10 {
+    background: rgba(6, 182, 212, 0.22) !important;
+    border-color: rgba(6, 182, 212, 0.75) !important;
+  }
+
+  .pdf-live .bg-violet-500\/10 {
+    background: rgba(139, 92, 246, 0.22) !important;
+    border-color: rgba(139, 92, 246, 0.75) !important;
+  }
+
+  .pdf-live .text-amber-300,
+  .pdf-live .text-yellow-300 {
+    color: #facc15 !important;
+  }
+
+  .pdf-live .text-cyan-300 {
+    color: #67e8f9 !important;
+  }
+
+  .pdf-live .text-violet-300 {
+    color: #c4b5fd !important;
+  }
+
+  .pdf-live .text-emerald-400,
+  .pdf-live .text-emerald-300 {
+    color: #34d399 !important;
+  }
+
+  .pdf-live .text-zinc-400,
+  .pdf-live .text-zinc-500 {
+    color: #a1a1aa !important;
+  }
+
+  .pdf-live .bg-emerald-500\/20,
+  .pdf-live .bg-emerald-600,
+  .pdf-live .bg-green-600 {
+    background: rgba(16, 185, 129, 0.35) !important;
+    color: #d1fae5 !important;
+    border-color: rgba(52, 211, 153, 0.75) !important;
+  }
+
+  .pdf-live .bg-zinc-800 {
+    background: #27272a !important;
+    color: #e5e7eb !important;
+  }
+}
+@media print {
+  .pdf-legend {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+    background: #f8fafc !important;
+    color: #0f172a !important;
+    border: 1px solid #dbe3ef !important;
+    border-radius: 10px !important;
+    padding: 8px !important;
+    margin-bottom: 10px !important;
+    font-size: 8px !important;
+  }
+
+  .pdf-legend span {
+    color: #334155 !important;
+  }
+}
+@media print {
+  .pdf-live .text-\[7px\] {
+    font-size: 9px !important;
+  }
+
+  .pdf-live .opacity-80,
+  .pdf-live .opacity-70,
+  .pdf-live .opacity-60 {
+    opacity: 1 !important;
+  }
+
+  .pdf-live .screen-live-card,
+  .pdf-live .screen-live-card * {
+    font-weight: 900 !important;
+    text-rendering: geometricPrecision !important;
+    -webkit-font-smoothing: antialiased !important;
+  }
+}
+@media print {
+  .pdf-live .opacity-80 {
+    display: none !important;
+  }
+}
+.pdf-country {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #dbeafe;
+  color: #1e3a8a;
+  font-weight: 900;
+  font-size: 10px;
+  margin-right: 6px;
+}
+
+
+@media print {
+  .country-pill {
+    display: inline-block !important;
+    padding: 1px 5px !important;
+    margin-right: 4px !important;
+    border-radius: 999px !important;
+    background: #e5e7eb !important;
+    color: #111827 !important;
+    font-size: 8px !important;
+    font-weight: 900 !important;
+
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}
+
+@media print {
+  .country-pill {
+    display: inline-block !important;
+    padding: 1px 5px !important;
+    margin-right: 4px !important;
+    border-radius: 999px !important;
+    background: #e5e7eb !important;
+    color: #111827 !important;
+    font-size: 8px !important;
+    font-weight: 900 !important;
+
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}
