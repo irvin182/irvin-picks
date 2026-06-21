@@ -6,7 +6,7 @@ import { calculateMomentum } from "@/lib/momentum";
 import LiveHeader from "@/components/ui/live/LiveHeader";
 import MatchSelector from "@/components/ui/live/MatchSelector";
 import ScoreBoard from "@/components/ui/live/ScoreBoard";
-
+import IrvinAIPanel from "@/components/ui/live/IrvinAIPanel";
 type Match = {
   id: number;
   minute: string;
@@ -226,36 +226,8 @@ export default function LiveTvDashboard() {
   onSelect={setSelectedId}
 />
           <section className="rounded-2xl border border-white/10 bg-[#07111c]/90 overflow-hidden grid grid-rows-[390px_1fr]">
-            
-            
-            
-            
-            
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 <ScoreBoard selected={selected} prediction={prediction} />
-
-
-
-
-
-            
 
             <div className="p-4 grid grid-cols-3 gap-4 overflow-y-auto">
               <Card title="GOLES ESPERADOS (xG)">
@@ -359,100 +331,31 @@ export default function LiveTvDashboard() {
             </div>
           </section>
 
-          <aside className="space-y-3 min-h-0 overflow-y-auto pr-1">
-            <Panel title="EVENTOS EN VIVO">
-              {(fixtureEvents.length > 0 ? fixtureEvents.slice(-5).reverse() : []).map((e: any, i: number) => (
-                <div key={i} className="grid grid-cols-[45px_35px_1fr_auto] py-3 border-b border-white/10 text-sm">
-                  <span>{e.time?.elapsed}'</span>
-                  <span>{eventIcon(e.type)}</span>
-                  <span className="font-bold">{e.type}</span>
-                  <span className={e.team?.name === selected.home ? "text-green-400" : "text-red-400"}>{e.team?.name}</span>
-                </div>
-              ))}
 
-              {fixtureEvents.length === 0 && <div className="text-white/50 text-sm">Sin eventos disponibles todavía.</div>}
-            </Panel>
 
-            <Panel title="IRVIN AI DECISIONES">
-              <div className="space-y-3">
-                <div className="rounded-xl border border-green-500/30 bg-green-500/10 p-3">
-                  <div className="text-white/50 text-xs font-bold">RECOMENDACIÓN PRINCIPAL</div>
-                  <div className="text-3xl font-black text-green-400 mt-1">{prediction?.recommendation ?? "ESPERAR"}</div>
-                  <div className="text-xs text-white/60 mt-2">
-                    No es garantía de acierto. Úsalo como lectura estadística, no como apuesta segura.
-                  </div>
-                </div>
 
-                <div className="grid grid-cols-2 gap-2 text-center">
-                  <MiniBox label="ACCIÓN" value={bestAction} color="text-yellow-400" />
-                  <MiniBox label="RIESGO" value={risk} color="text-red-400" />
-                  <MiniBox label="CONFIANZA" value={`${prediction?.confidence ?? 0}%`} color="text-green-400" />
-                  <MiniBox label="IRVIN SCORE" value={`${prediction?.irvinScore ?? 0}/100`} color="text-cyan-400" />
-                </div>
 
-                <div className="space-y-2">
-                  <div className="text-white/50 text-xs font-bold">LECTURA DE LA IA</div>
-                  {(aiDecisions.length > 0
-                    ? aiDecisions
-                    : ["⚠️ Sin suficientes datos avanzados. Mejor esperar confirmación."]
-                  )
-                    .slice(0, 7)
-                    .map((decision, index) => (
-                      <div key={index} className="rounded-lg bg-white/[0.04] border border-white/10 px-3 py-2 text-xs text-white/80 leading-snug">
-                        {decision}
-                      </div>
-                    ))}
-                </div>
 
-                <div className="rounded-xl bg-[#030b13] border border-white/10 p-3 text-xs text-white/60 leading-relaxed">
-                  <span className="text-white font-bold">Resumen:</span>{" "}
-                  {hasStats
-                    ? "El sistema está usando marcador, minuto, tiros, tiros al arco, posesión, eventos, momentum y Poisson Live."
-                    : "Modo básico: esta liga no entrega estadísticas avanzadas. La decisión se basa sobre todo en marcador, minuto y eventos."}
-                </div>
-              </div>
-            </Panel>
+     <IrvinAIPanel
+  fixtureEvents={fixtureEvents}
+  selected={selected}
+  prediction={prediction}
+  bestAction={bestAction}
+  risk={risk}
+  aiDecisions={aiDecisions}
+  hasStats={hasStats}
+/>
 
-            <Panel title="TENDENCIA DEL PARTIDO">
-              {!hasStats ? (
-                <div className="h-28 flex items-center justify-center text-white/40 border border-white/10 rounded-xl text-center text-sm">
-                  Momentum no disponible en modo básico
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  <div className="text-center text-sm font-black text-green-400">{momentum.leader}</div>
-                  <Progress label={selected.home} value={momentum.homePercent} color="green" />
-                  <Progress label={selected.away} value={momentum.awayPercent} color="blue" />
-                </div>
-              )}
-            </Panel>
 
-            <Panel title="ESTADÍSTICAS DEL PARTIDO">
-              {!hasStats ? (
-                <div className="text-white/50 text-sm leading-relaxed">
-                  Estadísticas no disponibles para este partido.
-                  <br />
-                  Modo básico: marcador + minuto.
-                </div>
-              ) : (
-                [
-                  ["TIROS", homeShots, awayShots],
-                  ["TIROS AL ARCO", homeShotsOn, awayShotsOn],
-                  ["TIROS DE ESQUINA", homeCorners, awayCorners],
-                  ["FALTAS", homeFouls, awayFouls],
-                  ["TARJETAS", homeYellowCards, awayYellowCards],
-                  ["PASES %", homePassAccuracy, awayPassAccuracy],
-                  ["POSESIÓN", homePossession, awayPossession],
-                ].map((s, i) => (
-                  <div key={i} className="grid grid-cols-[55px_1fr_55px] py-3 border-b border-white/10 text-sm items-center">
-                    <span className="font-black">{s[1]}</span>
-                    <span className="text-center text-white/60">{s[0]}</span>
-                    <span className="text-right font-black">{s[2]}</span>
-                  </div>
-                ))
-              )}
-            </Panel>
-          </aside>
+
+
+
+
+
+
+
+
+
         </section>
 
         <footer className="rounded-2xl border border-white/10 bg-[#07111c]/90 grid grid-cols-[160px_1fr_1fr_1fr_220px] items-center overflow-hidden">
