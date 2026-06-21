@@ -45,7 +45,7 @@ export default function DemoPage() {
     try {
       setError("");
 
-      const res = await fetch("/api/live", {
+      const res = await fetch("/api/demo-live", {
         cache: "no-store",
       });
 
@@ -116,7 +116,7 @@ export default function DemoPage() {
             </p>
 
             <Link
-              href="/api/checkout?plan=premium"
+              href="/pricing"
               className="inline-block mt-8 rounded-2xl bg-green-500 px-8 py-4 text-black font-black"
             >
               ACTIVAR PREMIUM
@@ -297,7 +297,7 @@ function PremiumCard({
 
         <div className="flex gap-4 mt-8">
           <Link
-            href="/api/checkout?plan=premium"
+            href="/pricing"
             className="flex-1 rounded-2xl bg-green-500 py-4 text-center text-black font-black hover:scale-105 transition"
           >
             ACTIVAR PREMIUM
@@ -376,12 +376,12 @@ function PremiumModal({
           disponible solo para usuarios Premium.
         </p>
 
-        <Link
-          href="/api/checkout?plan=premium"
-          className="block mt-8 rounded-2xl bg-green-500 py-4 text-black font-black"
-        >
-          Activar Premium
-        </Link>
+ <Link
+  href="/pricing"
+  className="rounded-2xl border border-green-400/40 px-8 py-4 text-green-300 font-black"
+>
+  Ver planes Premium
+</Link>
 
         <button onClick={onClose} className="mt-4 text-white/50 hover:text-white">
           Cerrar

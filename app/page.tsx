@@ -29,12 +29,12 @@ export default function HomePage() {
               ENTRAR AL SISTEMA
             </Link>
 
-            <Link
-              href="/probador/TV"
-              className="px-8 py-4 rounded-2xl border border-white/20 bg-white/5 hover:bg-white/10 transition"
-            >
-              VER DEMO EN VIVO
-            </Link>
+        <Link
+  href="/demo"
+  className="px-8 py-4 rounded-2xl border border-white/20 bg-white/5 hover:bg-white/10 transition"
+>
+  VER DEMO EN VIVO
+</Link>
           </div>
         </div>
       </section>
