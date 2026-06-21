@@ -6,21 +6,38 @@ import { supabase } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
 
+const ALLOWED_PLANS = ["beta", "premium", "vip"];
+
 function getStripe() {
   const key = process.env.STRIPE_SECRET_KEY;
-  if (!key) throw new Error("Falta STRIPE_SECRET_KEY");
+  if (!key) throw new Error("STRIPE_SECRET_KEY is not configured");
   return new Stripe(key);
 }
 
 function getResend() {
   const key = process.env.RESEND_API_KEY;
-  if (!key) throw new Error("Falta RESEND_API_KEY");
+  if (!key) throw new Error("RESEND_API_KEY is not configured");
   return new Resend(key);
 }
 
-function generatePassword(length = 10) {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$";
-  return Array.from({ length }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+function normalizePlan(plan: unknown) {
+  const value = String(plan ?? "premium").toLowerCase().trim();
+
+  if (!ALLOWED_PLANS.includes(value)) {
+    return null;
+  }
+
+  return value;
+}
+
+function generatePassword(length = 14) {
+  const chars =
+    "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$";
+
+  return Array.from(
+    { length },
+    () => chars[Math.floor(Math.random() * chars.length)]
+  ).join("");
 }
 
 function addOneMonth() {
@@ -41,14 +58,15 @@ async function sendWelcomeEmail({
   isNewUser: boolean;
 }) {
   const resend = getResend();
-  const loginUrl = "https://irvin-picks.vercel.app/login";
+  const loginUrl =
+    process.env.NEXT_PUBLIC_SITE_URL || "https://irvin-picks.vercel.app/login";
 
   await resend.emails.send({
     from: process.env.EMAIL_FROM || "Irvin Analytics <onboarding@resend.dev>",
     to: email,
     subject: isNewUser
-      ? "🎉 Bienvenido a Irvin Analytics – Tu cuenta ya está activa"
-      : "✅ Tu suscripción a Irvin Analytics está activa",
+      ? "Bienvenido a Irvin Analytics - Tu cuenta ya está activa"
+      : "Tu suscripción a Irvin Analytics está activa",
     html: `
       <div style="margin:0;padding:0;background:#03070b;font-family:Arial,sans-serif;color:#ffffff;">
         <div style="max-width:680px;margin:0 auto;padding:40px 20px;">
@@ -58,7 +76,7 @@ async function sendWelcomeEmail({
           </div>
 
           <div style="background:#07111c;border:1px solid rgba(0,255,153,0.35);border-radius:24px;padding:32px;">
-            <h2 style="color:#00ff99;margin-top:0;">🎉 Bienvenido a Irvin Analytics</h2>
+            <h2 style="color:#00ff99;margin-top:0;">Bienvenido a Irvin Analytics</h2>
 
             <p>Hola,</p>
             <p>Tu suscripción <b>${plan.toUpperCase()}</b> ha sido activada correctamente.</p>
@@ -68,26 +86,26 @@ async function sendWelcomeEmail({
                 ? `
                 <div style="background:#03070b;border:1px solid rgba(255,255,255,0.12);border-radius:18px;padding:22px;margin:24px 0;">
                   <h3 style="margin-top:0;color:#ffffff;">Tus datos de acceso</h3>
-                  <p><b>📧 Email:</b> ${email}</p>
-                  <p><b>🔑 Contraseña temporal:</b> ${password}</p>
+                  <p><b>Email:</b> ${email}</p>
+                  <p><b>Contraseña temporal:</b> ${password}</p>
                 </div>
                 `
                 : `
                 <div style="background:#03070b;border:1px solid rgba(255,255,255,0.12);border-radius:18px;padding:22px;margin:24px 0;">
                   <p>Tu cuenta ya existía, por eso hemos reactivado tu acceso.</p>
-                  <p><b>📧 Email:</b> ${email}</p>
+                  <p><b>Email:</b> ${email}</p>
                 </div>
                 `
             }
 
             <ul style="line-height:1.9;color:#d1d5db;">
-              <li>✅ Predicciones mediante Inteligencia Artificial</li>
-              <li>✅ Modelo Poisson avanzado</li>
-              <li>✅ Match Momentum en tiempo real</li>
-              <li>✅ Próximo Gol</li>
-              <li>✅ Over/Under inteligente</li>
-              <li>✅ BTTS / Ambos marcan</li>
-              <li>✅ Informes diarios</li>
+              <li>Predicciones mediante Inteligencia Artificial</li>
+              <li>Modelo Poisson avanzado</li>
+              <li>Match Momentum en tiempo real</li>
+              <li>Próximo Gol</li>
+              <li>Over/Under inteligente</li>
+              <li>BTTS / Ambos marcan</li>
+              <li>Informes diarios</li>
             </ul>
 
             <div style="text-align:center;margin-top:30px;">
@@ -117,32 +135,44 @@ export async function POST(req: NextRequest) {
     const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
     if (!webhookSecret) {
-      return NextResponse.json({ error: "Falta STRIPE_WEBHOOK_SECRET" }, { status: 500 });
+      return NextResponse.json(
+        { error: "STRIPE_WEBHOOK_SECRET is not configured" },
+        { status: 500 }
+      );
     }
 
     event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
-  } catch (err: any) {
-    return NextResponse.json(
-      { error: "Webhook inválido", message: err.message },
-      { status: 400 }
-    );
+  } catch (err) {
+    console.error("Stripe webhook signature error:", err);
+    return NextResponse.json({ error: "Webhook inválido" }, { status: 400 });
   }
 
   try {
     if (event.type === "checkout.session.completed") {
       const session = event.data.object as Stripe.Checkout.Session;
-      const email = session.customer_details?.email?.toLowerCase();
-      const plan = session.metadata?.plan || "premium";
+
+      const email = session.customer_details?.email?.toLowerCase().trim();
+      const plan = normalizePlan(session.metadata?.plan);
 
       if (!email) {
         return NextResponse.json({ error: "Cliente sin email" }, { status: 400 });
       }
 
-      const { data: existingUser } = await supabase
+      if (!plan) {
+        console.error("Plan inválido recibido desde Stripe:", session.metadata);
+        return NextResponse.json({ error: "Plan inválido" }, { status: 400 });
+      }
+
+      const stripeCustomerId = String(session.customer ?? "");
+      const stripeSubscriptionId = String(session.subscription ?? "");
+
+      const { data: existingUser, error: lookupError } = await supabase
         .from("app_users")
         .select("id,email")
         .eq("email", email)
         .maybeSingle();
+
+      if (lookupError) throw lookupError;
 
       if (existingUser) {
         const { error } = await supabase
@@ -151,8 +181,8 @@ export async function POST(req: NextRequest) {
             plan,
             active: true,
             expires_at: addOneMonth(),
-            stripe_customer_id: String(session.customer ?? ""),
-            stripe_subscription_id: String(session.subscription ?? ""),
+            stripe_customer_id: stripeCustomerId,
+            stripe_subscription_id: stripeSubscriptionId,
             active_session_id: null,
             last_seen_at: null,
           })
@@ -163,7 +193,7 @@ export async function POST(req: NextRequest) {
         await sendWelcomeEmail({ email, plan, isNewUser: false });
       } else {
         const rawPassword = generatePassword();
-        const hashedPassword = await bcrypt.hash(rawPassword, 10);
+        const hashedPassword = await bcrypt.hash(rawPassword, 12);
 
         const { error } = await supabase.from("app_users").insert({
           email,
@@ -172,8 +202,8 @@ export async function POST(req: NextRequest) {
           plan,
           active: true,
           expires_at: addOneMonth(),
-          stripe_customer_id: String(session.customer ?? ""),
-          stripe_subscription_id: String(session.subscription ?? ""),
+          stripe_customer_id: stripeCustomerId,
+          stripe_subscription_id: stripeSubscriptionId,
           active_session_id: null,
           last_seen_at: null,
           last_login_at: null,
@@ -191,9 +221,11 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({ received: true });
-  } catch (error: any) {
+  } catch (error) {
+    console.error("Stripe webhook processing error:", error);
+
     return NextResponse.json(
-      { error: "Error procesando webhook", message: error?.message ?? "Error desconocido" },
+      { error: "Error procesando webhook" },
       { status: 500 }
     );
   }
