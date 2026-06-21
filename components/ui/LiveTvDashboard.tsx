@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { calculateLivePoisson } from "@/lib/livePoisson";
 import { calculateMomentum } from "@/lib/momentum";
-import LiveHeader from "@/components/live/LiveHeader";
+import LiveHeader from "@/components/ui/live/LiveHeader";
 
 
 type Match = {
