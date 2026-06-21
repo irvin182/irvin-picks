@@ -3,6 +3,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { calculateLivePoisson } from "@/lib/livePoisson";
 import { calculateMomentum } from "@/lib/momentum";
+import LiveHeader from "@/components/live/LiveHeader";
+
 
 type Match = {
   id: number;
@@ -208,31 +210,17 @@ export default function LiveTvDashboard() {
   return (
     <main className="min-h-screen bg-[#03070b] text-white overflow-hidden">
       <div className="h-screen p-4 grid grid-rows-[64px_1fr_58px] gap-3">
-        <header className="grid grid-cols-[1fr_auto_1fr] items-center border border-white/10 bg-[#07111c]/80 rounded-2xl px-5">
-          <div className="flex items-center gap-8">
-            <div>
-              <div className="text-3xl font-black tracking-[0.18em]">IRVIN</div>
-              <div className="text-xs tracking-[0.45em] text-green-400 font-bold">ANALYTICS</div>
-            </div>
-            <div className="text-2xl font-bold">MUNDIAL 2026</div>
-            <div className="px-4 py-2 rounded-full bg-green-500/15 text-green-400 font-bold border border-green-500/30">
-              ● EN VIVO
-            </div>
-            <div className={`px-4 py-2 rounded-full bg-white/5 font-bold border border-white/10 ${dataModeColor}`}>
-              {dataMode}
-            </div>
-          </div>
+<LiveHeader
+  matchesCount={matches.length}
+  lastUpdate={lastUpdate}
+  dataMode={dataMode}
+  dataModeColor={dataModeColor}
+/>
 
-          <div className="text-center">
-            <div className="text-4xl font-black text-green-400">{matches.length}</div>
-            <div className="text-sm font-bold text-white/80">PARTIDOS EN VIVO</div>
-          </div>
 
-          <div className="text-right">
-            <div className="text-2xl font-black">{lastUpdate || "--:--:--"}</div>
-            <div className="text-sm text-white/60">Actualización automática 5 min</div>
-          </div>
-        </header>
+
+
+
 
         <section className="grid grid-cols-[360px_minmax(620px,1fr)_390px] gap-3 min-h-0">
           <aside className="rounded-2xl border border-white/10 bg-[#07111c]/90 overflow-hidden">
