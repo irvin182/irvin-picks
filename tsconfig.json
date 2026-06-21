@@ -35,7 +35,7 @@
     "**/*.tsx",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts"
-, ".next/dev/probador/page.tsx", ".next/dev/page.tsx", ".next/middleware.ts"  ],
+  ],
   "exclude": [
     "node_modules"
   ]

@@ -43,7 +43,7 @@ const session = await sessionRes.json();
 if (session?.user?.role === "ADMIN" || session?.user?.plan === "admin") {
   window.location.replace("/admin");
 } else {
-  window.location.replace("/probador/TV");
+ window.location.replace("/dashboard");
 }
     } catch (err) {
       console.error("Error login:", err);
