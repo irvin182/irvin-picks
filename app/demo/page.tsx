@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type LiveMatch = {
   fixture?: {
@@ -12,20 +12,15 @@ type LiveMatch = {
       long?: string;
     };
   };
-  league?: {
-    name?: string;
-    country?: string;
-    logo?: string;
-  };
+league?: {
+  name?: string;
+  country?: string;
+  logo?: string;
+  flag?: string;
+};
   teams?: {
-    home?: {
-      name?: string;
-      logo?: string;
-    };
-    away?: {
-      name?: string;
-      logo?: string;
-    };
+    home?: { name?: string; logo?: string };
+    away?: { name?: string; logo?: string };
   };
   goals?: {
     home?: number | null;
@@ -36,19 +31,17 @@ type LiveMatch = {
 
 export default function DemoPage() {
   const [matches, setMatches] = useState<LiveMatch[]>([]);
-  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
   const [modal, setModal] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const analysisRef = useRef<HTMLDivElement | null>(null);
 
   async function loadLive() {
     try {
       setError("");
 
-      const res = await fetch("/api/demo-live", {
-        cache: "no-store",
-      });
-
+      const res = await fetch("/api/demo-live", { cache: "no-store" });
       const json = await res.json();
 
       if (!res.ok) {
@@ -56,7 +49,21 @@ export default function DemoPage() {
         return;
       }
 
-      setMatches(json?.response || []);
+      const newMatches: LiveMatch[] = json?.response || [];
+
+      setMatches(newMatches);
+
+      setSelectedId((currentId) => {
+        if (!newMatches.length) return null;
+
+        const stillExists = newMatches.some(
+          (m) => m.fixture?.id === currentId
+        );
+
+        if (currentId && stillExists) return currentId;
+
+        return newMatches[0]?.fixture?.id ?? null;
+      });
     } catch {
       setError("Error conectando con el sistema en vivo.");
     } finally {
@@ -66,118 +73,122 @@ export default function DemoPage() {
 
   useEffect(() => {
     loadLive();
-
     const timer = setInterval(loadLive, 60000);
-
     return () => clearInterval(timer);
   }, []);
 
-  const selectedMatch = matches[selectedIndex] || matches[0];
+  const selectedMatch =
+    matches.find((m) => m.fixture?.id === selectedId) || matches[0];
+
+  function selectMatch(match: LiveMatch) {
+    setSelectedId(match.fixture?.id ?? null);
+
+    setTimeout(() => {
+      analysisRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 100);
+  }
 
   return (
-    <main className="min-h-screen bg-[#03070b] text-white px-6 py-10">
+    <main className="min-h-screen bg-[#03070b] text-white px-4 py-8">
       <section className="max-w-7xl mx-auto">
         <header className="text-center">
-          <div className="inline-flex px-4 py-2 rounded-full bg-green-500/10 border border-green-500/30 text-green-400 font-bold">
+          <div className="inline-flex px-4 py-2 rounded-full bg-green-500/10 border border-green-500/30 text-green-400 font-black text-sm">
             DEMO REAL EN VIVO
           </div>
 
-          <h1 className="text-5xl font-black mt-6">
+          <h1 className="text-4xl md:text-6xl font-black mt-6 leading-tight">
             Prueba limitada de{" "}
             <span className="text-green-400">Irvin Analytics</span>
           </h1>
 
-          <p className="text-white/60 text-xl mt-6 max-w-4xl mx-auto">
-            Esta demo usa partidos reales en vivo. La IA avanzada, BTTS, Próximo
-            Gol, Momentum e informes están reservados para usuarios Premium.
+          <p className="text-white/60 text-lg md:text-xl mt-6 max-w-4xl mx-auto">
+            Partidos reales en vivo. La IA avanzada, BTTS, Próximo Gol,
+            Momentum e informes están bloqueados para usuarios Premium.
           </p>
         </header>
 
         {loading && (
-          <div className="mt-14 rounded-3xl border border-white/10 bg-[#07111c] p-10 text-center">
-            <p className="text-green-400 font-black">Cargando partidos en vivo...</p>
-          </div>
+          <Box>
+            <p className="text-green-400 font-black">
+              Cargando partidos en vivo...
+            </p>
+          </Box>
         )}
 
         {!loading && error && (
-          <div className="mt-14 rounded-3xl border border-red-500/30 bg-red-500/10 p-10 text-center text-red-300">
-            {error}
-          </div>
+          <Box red>
+            <p>{error}</p>
+          </Box>
         )}
 
         {!loading && !error && matches.length === 0 && (
-          <div className="mt-14 rounded-3xl border border-yellow-500/30 bg-yellow-500/10 p-10 text-center">
+          <Box yellow>
             <h2 className="text-3xl font-black text-yellow-400">
               No hay partidos en vivo ahora mismo
             </h2>
             <p className="text-white/60 mt-4">
-              Vuelve cuando haya partidos activos o entra al sistema Premium
-              para consultar informes e inteligencia avanzada.
+              Vuelve cuando haya partidos activos o revisa los planes para
+              desbloquear informes e IA avanzada.
             </p>
 
             <Link
               href="/pricing"
               className="inline-block mt-8 rounded-2xl bg-green-500 px-8 py-4 text-black font-black"
             >
-              ACTIVAR PREMIUM
+              VER PLANES
             </Link>
-          </div>
+          </Box>
         )}
 
-        {!loading && !error && matches.length > 0 && (
+        {!loading && !error && matches.length > 0 && selectedMatch && (
+
+
+
+
+
           <>
-            <div className="grid lg:grid-cols-[320px_1fr] gap-8 mt-14">
-              <aside className="rounded-3xl border border-white/10 bg-[#07111c] p-5">
-                <div className="flex justify-between items-center mb-5">
-                  <h2 className="font-black">Partidos reales</h2>
-                  <span className="rounded-full bg-green-500/20 px-3 py-1 text-green-400 font-black text-sm">
-                    {matches.length}
-                  </span>
-                </div>
+           <section ref={analysisRef} className="mt-10">
+  <MatchAnalysis match={selectedMatch} />
+</section>
 
-                <div className="space-y-3 max-h-[620px] overflow-y-auto pr-1">
-                  {matches.slice(0, 10).map((match, index) => (
-                    <button
-                      key={match.fixture?.id || index}
-                      onClick={() => setSelectedIndex(index)}
-                      className={`w-full rounded-2xl border p-4 text-left transition ${
-                        selectedIndex === index
-                          ? "border-green-500 bg-green-500/10"
-                          : "border-white/10 bg-black/20 hover:border-white/30"
-                      }`}
-                    >
-                      <p className="text-white/40 text-xs">
-                        {match.league?.name || "Liga"} ·{" "}
-                        {match.fixture?.status?.short || "LIVE"}
-                      </p>
+<section className="mt-8 rounded-3xl border border-white/10 bg-[#07111c] p-5">
+  <div className="flex items-center justify-between gap-4 mb-5">
+    <div>
+      <h2 className="text-2xl font-black">Cambiar partido</h2>
+      <p className="text-white/45 text-sm mt-1">
+        Selecciona otro partido real en vivo.
+      </p>
+    </div>
 
-                      <div className="mt-3 flex justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="font-bold truncate">
-                            {match.teams?.home?.name || "Local"}
-                          </p>
-                          <p className="font-bold truncate">
-                            {match.teams?.away?.name || "Visitante"}
-                          </p>
-                        </div>
+    <span className="rounded-full bg-green-500/20 px-4 py-2 text-green-400 font-black">
+      {matches.length}
+    </span>
+  </div>
 
-                        <div className="font-black text-right">
-                          <p>{match.goals?.home ?? 0}</p>
-                          <p>{match.goals?.away ?? 0}</p>
-                        </div>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </aside>
+  <div className="flex gap-4 overflow-x-auto pb-2">
+    {matches.slice(0, 12).map((match, index) => (
+      <MatchButton
+        key={match.fixture?.id || index}
+        match={match}
+        active={match.fixture?.id === selectedMatch.fixture?.id}
+        onClick={() => selectMatch(match)}
+      />
+    ))}
+  </div>
+</section>
 
-              <div className="grid xl:grid-cols-[1fr_420px] gap-8">
-                <MatchCard match={selectedMatch} />
-                <PremiumCard onLockedClick={setModal} />
-              </div>
-            </div>
+<section className="mt-8">
+  <PremiumLocks onLockedClick={setModal} />
+</section>
 
-            <Comparison />
+<Comparison />
+
+
+
+
           </>
         )}
       </section>
@@ -187,10 +198,67 @@ export default function DemoPage() {
   );
 }
 
-function MatchCard({ match }: { match: LiveMatch }) {
+function MatchButton({
+  match,
+  active,
+  onClick,
+}: {
+  match: LiveMatch;
+  active: boolean;
+  onClick: () => void;
+}) {
+  const badge = match.league?.flag || match.league?.logo;
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`min-w-[280px] md:min-w-[330px] rounded-3xl border p-5 text-left transition ${
+        active
+          ? "border-green-500 bg-green-500/10 shadow-[0_0_25px_rgba(0,255,120,.15)]"
+          : "border-white/10 bg-black/20 hover:border-green-500/40"
+      }`}
+    >
+      <div className="flex items-center gap-2 text-white/45 text-sm">
+        {badge && (
+          <img
+            src={badge}
+            alt={match.league?.country || "league"}
+            className="w-5 h-5 rounded-full object-cover bg-white"
+          />
+        )}
+
+        <span className="truncate">
+          {match.league?.country ? `${match.league.country} · ` : ""}
+          {match.league?.name || "Liga"} ·{" "}
+          {match.fixture?.status?.short || "LIVE"}
+        </span>
+      </div>
+
+      <div className="mt-4 flex justify-between gap-4">
+        <div className="min-w-0">
+          <p className="text-lg font-black truncate">
+            {match.teams?.home?.name || "Local"}
+          </p>
+          <p className="text-lg font-black truncate mt-1">
+            {match.teams?.away?.name || "Visitante"}
+          </p>
+        </div>
+
+        <div className="text-2xl font-black text-right">
+          <p>{match.goals?.home ?? 0}</p>
+          <p>{match.goals?.away ?? 0}</p>
+        </div>
+      </div>
+    </button>
+  );
+}
+
+
+
+function MatchAnalysis({ match }: { match: LiveMatch }) {
   const home = match.teams?.home;
   const away = match.teams?.away;
-
   const elapsed = match.fixture?.status?.elapsed;
   const status = match.fixture?.status?.short || "LIVE";
 
@@ -200,28 +268,35 @@ function MatchCard({ match }: { match: LiveMatch }) {
   }, [elapsed]);
 
   return (
-    <div className="rounded-3xl border border-white/10 bg-[#07111c] p-8">
+    <div className="rounded-3xl border border-white/10 bg-[#07111c] p-6 md:p-8">
       <div className="flex justify-between gap-5">
         <div>
-          <p className="text-white/40">
-            {match.league?.name || "Liga en vivo"}
-          </p>
+          <div className="flex items-center gap-2 text-white/40">
+            {match.league?.flag && (
+              <img
+                src={match.league.flag}
+                alt={match.league?.country || "flag"}
+                className="w-5 h-5 rounded-full object-cover"
+              />
+            )}
+            <span>{match.league?.name || "Liga en vivo"}</span>
+          </div>
 
-          <h2 className="text-3xl font-black mt-2">
+          <h2 className="text-3xl md:text-4xl font-black mt-3 leading-tight">
             {home?.name || "Local"} vs {away?.name || "Visitante"}
           </h2>
         </div>
 
-        <div className="text-green-400 font-black text-2xl whitespace-nowrap">
+        <div className="text-green-400 font-black text-3xl whitespace-nowrap">
           {elapsed ? `${elapsed}'` : status}
         </div>
       </div>
 
-      <div className="flex justify-center items-center gap-8 mt-10">
+      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 mt-10">
         <TeamLogo src={home?.logo} name={home?.name || "Local"} />
 
         <div className="text-center">
-          <div className="text-6xl font-black">
+          <div className="text-5xl md:text-7xl font-black">
             {match.goals?.home ?? 0} - {match.goals?.away ?? 0}
           </div>
           <p className="text-green-400 font-black mt-2">
@@ -232,7 +307,7 @@ function MatchCard({ match }: { match: LiveMatch }) {
         <TeamLogo src={away?.logo} name={away?.name || "Visitante"} />
       </div>
 
-      <div className="grid grid-cols-3 gap-4 mt-10">
+      <div className="grid grid-cols-3 gap-3 mt-10">
         <Stat title="Eventos" value={String(match.events?.length || 0)} />
         <Stat title="Minuto" value={elapsed ? `${elapsed}'` : status} />
         <Stat title="Estado" value={status} />
@@ -241,21 +316,21 @@ function MatchCard({ match }: { match: LiveMatch }) {
       <div className="mt-8">
         <Row label="Predicción demo" value="Over 1.5" />
         <Row label="Confianza demo" value={`${demoConfidence}%`} />
-        <Row label="IA completa" value="Premium" yellow />
+        <Row label="IA completa" value="Bloqueada" yellow />
       </div>
 
       <div className="mt-8 rounded-2xl bg-yellow-500/10 border border-yellow-500/20 p-5">
         <p className="text-yellow-300 font-black">Vista limitada</p>
         <p className="text-white/60 mt-2">
-          Estás viendo solo una parte del sistema. Las decisiones avanzadas de
-          IA están bloqueadas en la demo.
+          Estás viendo solo una parte del sistema. BTTS, Próximo Gol, Momentum,
+          Poisson e informes están bloqueados en la demo.
         </p>
       </div>
     </div>
   );
 }
 
-function PremiumCard({
+function PremiumLocks({
   onLockedClick,
 }: {
   onLockedClick: (title: string) => void;
@@ -272,13 +347,13 @@ function PremiumCard({
   ];
 
   return (
-    <div className="rounded-3xl border border-green-500/20 bg-[#07111c] p-8">
+    <div className="rounded-3xl border border-green-500/20 bg-[#07111c] p-6 md:p-8">
       <h2 className="text-3xl font-black text-green-400">
-        Funciones Premium bloqueadas
+        Funciones bloqueadas
       </h2>
 
       <p className="text-white/50 mt-3">
-        Pulsa cualquier candado para ver qué desbloquea Premium.
+        Pulsa cualquier candado para ver qué desbloquean Premium y VIP.
       </p>
 
       <div className="mt-8 space-y-4">
@@ -287,30 +362,12 @@ function PremiumCard({
         ))}
       </div>
 
-      <div className="mt-10 rounded-2xl bg-green-500/10 border border-green-500/20 p-6">
-        <h3 className="text-2xl font-black">Acceso Premium</h3>
-
-        <p className="text-white/60 mt-3">
-          Sistema completo con TV en vivo, informes, IA, BTTS, Próximo Gol,
-          Momentum y análisis premium.
-        </p>
-
-        <div className="flex gap-4 mt-8">
-          <Link
-            href="/pricing"
-            className="flex-1 rounded-2xl bg-green-500 py-4 text-center text-black font-black hover:scale-105 transition"
-          >
-            ACTIVAR PREMIUM
-          </Link>
-
-          <Link
-            href="/login"
-            className="flex-1 rounded-2xl border border-white/20 py-4 text-center hover:bg-white/10 transition"
-          >
-            LOGIN
-          </Link>
-        </div>
-      </div>
+      <Link
+        href="/pricing"
+        className="block mt-10 rounded-2xl bg-green-500 py-4 text-center text-black font-black hover:scale-105 transition"
+      >
+        VER PLANES
+      </Link>
     </div>
   );
 }
@@ -323,7 +380,7 @@ function Comparison() {
         <ul className="mt-6 space-y-3 text-white/70">
           <li>✅ Partidos reales en vivo</li>
           <li>✅ Marcador y minuto</li>
-          <li>✅ Escudos y liga</li>
+          <li>✅ Escudos, país y liga</li>
           <li>✅ Predicción básica de ejemplo</li>
           <li>❌ BTTS avanzado</li>
           <li>❌ Próximo Gol</li>
@@ -333,7 +390,10 @@ function Comparison() {
       </div>
 
       <div className="rounded-3xl border border-green-500/30 bg-green-500/10 p-8">
-        <h3 className="text-2xl font-black text-green-400">Premium</h3>
+        <h3 className="text-2xl font-black text-green-400">
+          Premium / VIP
+        </h3>
+
         <ul className="mt-6 space-y-3 text-white/80">
           <li>✅ TV en vivo completa</li>
           <li>✅ IA predictiva</li>
@@ -345,10 +405,10 @@ function Comparison() {
         </ul>
 
         <Link
-          href="/api/checkout?plan=premium"
+          href="/pricing"
           className="block mt-8 rounded-2xl bg-green-500 py-4 text-center text-black font-black"
         >
-          QUIERO PREMIUM
+          VER PLANES
         </Link>
       </div>
     </div>
@@ -368,22 +428,26 @@ function PremiumModal({
         <div className="text-5xl">🔒</div>
 
         <h2 className="text-3xl font-black mt-4 text-green-400">
-          Función Premium
+          Función bloqueada
         </h2>
 
         <p className="text-white/70 mt-4">
           <b>{title}</b> utiliza el motor avanzado de Irvin Analytics y está
-          disponible solo para usuarios Premium.
+          disponible en los planes Premium y VIP.
         </p>
 
- <Link
-  href="/pricing"
-  className="rounded-2xl border border-green-400/40 px-8 py-4 text-green-300 font-black"
->
-  Ver planes Premium
-</Link>
+        <Link
+          href="/pricing"
+          className="block mt-8 rounded-2xl bg-green-500 py-4 text-black font-black"
+        >
+          Ver planes
+        </Link>
 
-        <button onClick={onClose} className="mt-4 text-white/50 hover:text-white">
+        <button
+          type="button"
+          onClick={onClose}
+          className="mt-4 text-white/50 hover:text-white"
+        >
           Cerrar
         </button>
       </div>
@@ -393,15 +457,15 @@ function PremiumModal({
 
 function TeamLogo({ src, name }: { src?: string; name: string }) {
   return (
-    <div className="text-center w-28">
+    <div className="text-center min-w-0">
       {src ? (
         <img
           src={src}
           alt={name}
-          className="w-20 h-20 object-contain mx-auto bg-white rounded-xl p-2"
+          className="w-16 h-16 md:w-20 md:h-20 object-contain mx-auto bg-white rounded-xl p-2"
         />
       ) : (
-        <div className="w-20 h-20 mx-auto rounded-xl bg-white/10" />
+        <div className="w-16 h-16 md:w-20 md:h-20 mx-auto rounded-xl bg-white/10" />
       )}
 
       <p className="text-xs text-white/60 mt-3 truncate">{name}</p>
@@ -412,8 +476,8 @@ function TeamLogo({ src, name }: { src?: string; name: string }) {
 function Stat({ title, value }: { title: string; value: string }) {
   return (
     <div className="rounded-xl bg-black/30 p-4 border border-white/10">
-      <p className="text-white/40 text-sm">{title}</p>
-      <p className="text-2xl font-black mt-2">{value}</p>
+      <p className="text-white/40 text-xs md:text-sm">{title}</p>
+      <p className="text-xl md:text-2xl font-black mt-2">{value}</p>
     </div>
   );
 }
@@ -428,9 +492,13 @@ function Row({
   yellow?: boolean;
 }) {
   return (
-    <div className="flex justify-between py-4 border-b border-white/10">
+    <div className="flex justify-between gap-4 py-4 border-b border-white/10">
       <span>{label}</span>
-      <span className={`font-black ${yellow ? "text-yellow-400" : "text-green-400"}`}>
+      <span
+        className={`font-black text-right ${
+          yellow ? "text-yellow-400" : "text-green-400"
+        }`}
+      >
         {value}
       </span>
     </div>
@@ -453,5 +521,29 @@ function Lock({
       <span>{text}</span>
       <span className="text-yellow-400">🔒</span>
     </button>
+  );
+}
+
+function Box({
+  children,
+  red,
+  yellow,
+}: {
+  children: React.ReactNode;
+  red?: boolean;
+  yellow?: boolean;
+}) {
+  return (
+    <div
+      className={`mt-14 rounded-3xl border p-10 text-center ${
+        red
+          ? "border-red-500/30 bg-red-500/10 text-red-300"
+          : yellow
+          ? "border-yellow-500/30 bg-yellow-500/10"
+          : "border-white/10 bg-[#07111c]"
+      }`}
+    >
+      {children}
+    </div>
   );
 }
