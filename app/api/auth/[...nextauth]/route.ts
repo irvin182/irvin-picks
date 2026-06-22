@@ -78,9 +78,19 @@ const handler = NextAuth({
           return null;
         }
 
-        const isValidPassword = await bcrypt.compare(password, user.password);
+      console.log("===== LOGIN =====");
+console.log("Email recibido:", email);
+console.log("Hash BD:", user.password);
 
-        if (!isValidPassword) return null;
+const isValidPassword = await bcrypt.compare(password, user.password);
+
+console.log("Password correcta:", isValidPassword);
+console.log("Usuario:", user);
+
+if (!isValidPassword) {
+  console.log("PASSWORD INCORRECTA");
+  return null;
+}
 
         const sessionId = crypto.randomUUID();
 
