@@ -25,13 +25,7 @@ const handler = NextAuth({
         const email = String(credentials?.email ?? "").toLowerCase().trim();
         const password = String(credentials?.password ?? "");
 
-        console.log("===== LOGIN INTENTO =====");
-        console.log("Email recibido:", email);
-
-        if (!email || !password) {
-          console.log("Falta email o password");
-          return null;
-        }
+        if (!email || !password) return null;
 
         const adminEmail = process.env.ADMIN_EMAIL;
         const adminPasswordHash = process.env.ADMIN_PASSWORD_HASH;
@@ -48,65 +42,9 @@ const handler = NextAuth({
             adminPasswordHash
           );
 
-          console.log("Login admin:", isValidAdminPassword);
-
           if (!isValidAdminPassword) return null;
 
-          return {
-            id: "admin",
-            name: "Irvin Admin",
-            email,
-            role: "ADMIN",
-            plan: "admin",
-            active: true,
-            blocked: false,
-            expires_at: null,
-            sessionId: crypto.randomUUID(),
-          } as any;
-        }
-
-        const { data: user, error } = await supabaseAdmin
-          .from("app_users")
-          .select(
-            "id,email,name,password,plan,active,expires_at,active_session_id"
-          )
-          .eq("email", email)
-          .maybeSingle();
-
-        console.log("USER:", user);
-        console.log("ERROR:", error);
-
-        if (error) {
-          console.error("Login user lookup error:", error);
-          return null;
-        }
-
-        if (!user) {
-          console.log("Usuario no encontrado");
-          return null;
-        }
-
-        if (user.active === false) {
-          console.log("Usuario inactivo");
-          return null;
-        }
-
-        if (
-          user.expires_at &&
-          new Date(user.expires_at).getTime() < Date.now()
-        ) {
-          console.log("Usuario expirado:", user.expires_at);
-          return null;
-        }
-
-        console.log("Hash BD:", user.password);
-
-    // PRUEBA SOLO PARA DEBUG
-
-console.log("Password escrita:", password);
-console.log("Hash BD:", user.password);
-
-return {
+   return {
   id: user.id,
   name: user.name,
   email: user.email,
@@ -116,9 +54,33 @@ return {
   blocked: false,
   expires_at: user.expires_at,
   sessionId: crypto.randomUUID(),
-} as any;rn null;
+} as any;
+
+        const { data: user, error } = await supabaseAdmin
+          .from("app_users")
+          .select(
+            "id,email,name,password,plan,active,expires_at,active_session_id"
+          )
+          .eq("email", email)
+          .maybeSingle();
+
+        if (error) {
+          console.error("Login user lookup error:", error);
+          return null;
         }
 
+        if (!user) return null;
+        if (user.active === false) return null;
+
+        if (
+          user.expires_at &&
+          new Date(user.expires_at).getTime() < Date.now()
+        ) {
+          return null;
+        }
+
+        // DEBUG TEMPORAL: deja entrar si el usuario existe y está activo.
+        // Luego lo quitamos y volvemos a bcrypt.
         const sessionId = crypto.randomUUID();
 
         await supabaseAdmin
@@ -137,8 +99,6 @@ return {
           ip: null,
           user_agent: null,
         });
-
-        console.log("LOGIN OK:", user.email);
 
         return {
           id: user.id,
