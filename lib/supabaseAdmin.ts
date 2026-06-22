@@ -17,7 +17,9 @@ export const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
     autoRefreshToken: false,
   },
 });
+
+
 console.log(
-  "SUPABASE ADMIN KEY START:",
-  process.env.SUPABASE_SERVICE_ROLE_KEY?.slice(0, 12)
+  "SUPABASE SERVICE KEY START:",
+  process.env.SUPABASE_SERVICE_ROLE_KEY?.slice(0, 20)
 );
