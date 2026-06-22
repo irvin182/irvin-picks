@@ -25,7 +25,13 @@ const handler = NextAuth({
         const email = String(credentials?.email ?? "").toLowerCase().trim();
         const password = String(credentials?.password ?? "");
 
-        if (!email || !password) return null;
+        console.log("===== LOGIN INTENTO =====");
+        console.log("Email recibido:", email);
+
+        if (!email || !password) {
+          console.log("Falta email o password");
+          return null;
+        }
 
         const adminEmail = process.env.ADMIN_EMAIL;
         const adminPasswordHash = process.env.ADMIN_PASSWORD_HASH;
@@ -41,6 +47,8 @@ const handler = NextAuth({
             password,
             adminPasswordHash
           );
+
+          console.log("Login admin:", isValidAdminPassword);
 
           if (!isValidAdminPassword) return null;
 
@@ -65,32 +73,51 @@ const handler = NextAuth({
           .eq("email", email)
           .maybeSingle();
 
+        console.log("USER:", user);
+        console.log("ERROR:", error);
+
         if (error) {
           console.error("Login user lookup error:", error);
           return null;
         }
 
-        if (!user) return null;
-
-        if (user.active === false) return null;
-
-        if (user.expires_at && new Date(user.expires_at).getTime() < Date.now()) {
+        if (!user) {
+          console.log("Usuario no encontrado");
           return null;
         }
 
-      console.log("===== LOGIN =====");
-console.log("Email recibido:", email);
+        if (user.active === false) {
+          console.log("Usuario inactivo");
+          return null;
+        }
+
+        if (
+          user.expires_at &&
+          new Date(user.expires_at).getTime() < Date.now()
+        ) {
+          console.log("Usuario expirado:", user.expires_at);
+          return null;
+        }
+
+        console.log("Hash BD:", user.password);
+
+    // PRUEBA SOLO PARA DEBUG
+
+console.log("Password escrita:", password);
 console.log("Hash BD:", user.password);
 
-const isValidPassword = await bcrypt.compare(password, user.password);
-
-console.log("Password correcta:", isValidPassword);
-console.log("Usuario:", user);
-
-if (!isValidPassword) {
-  console.log("PASSWORD INCORRECTA");
-  return null;
-}
+return {
+  id: user.id,
+  name: user.name,
+  email: user.email,
+  role: "USER",
+  plan: user.plan,
+  active: true,
+  blocked: false,
+  expires_at: user.expires_at,
+  sessionId: crypto.randomUUID(),
+} as any;rn null;
+        }
 
         const sessionId = crypto.randomUUID();
 
@@ -110,6 +137,8 @@ if (!isValidPassword) {
           ip: null,
           user_agent: null,
         });
+
+        console.log("LOGIN OK:", user.email);
 
         return {
           id: user.id,
