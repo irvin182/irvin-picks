@@ -44,23 +44,22 @@ const handler = NextAuth({
 
           if (!isValidAdminPassword) return null;
 
-   return {
-  id: user.id,
-  name: user.name,
-  email: user.email,
-  role: "USER",
-  plan: user.plan,
-  active: true,
-  blocked: false,
-  expires_at: user.expires_at,
-  sessionId: crypto.randomUUID(),
-} as any;
+          return {
+            id: "admin",
+            name: "Irvin Admin",
+            email,
+            role: "ADMIN",
+            plan: "admin",
+            active: true,
+            blocked: false,
+            expires_at: null,
+            sessionId: crypto.randomUUID(),
+          } as any;
+        }
 
         const { data: user, error } = await supabaseAdmin
           .from("app_users")
-          .select(
-            "id,email,name,password,plan,active,expires_at,active_session_id"
-          )
+          .select("id,email,name,password,plan,active,expires_at,active_session_id")
           .eq("email", email)
           .maybeSingle();
 
@@ -72,15 +71,11 @@ const handler = NextAuth({
         if (!user) return null;
         if (user.active === false) return null;
 
-        if (
-          user.expires_at &&
-          new Date(user.expires_at).getTime() < Date.now()
-        ) {
+        if (user.expires_at && new Date(user.expires_at).getTime() < Date.now()) {
           return null;
         }
 
-        // DEBUG TEMPORAL: deja entrar si el usuario existe y está activo.
-        // Luego lo quitamos y volvemos a bcrypt.
+        // TEMPORAL: deja entrar al usuario si existe y está activo.
         const sessionId = crypto.randomUUID();
 
         await supabaseAdmin
