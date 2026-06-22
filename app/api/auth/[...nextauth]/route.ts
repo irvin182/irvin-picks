@@ -1,6 +1,11 @@
 import NextAuth from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
+
+if (!process.env.NEXTAUTH_SECRET) {
+  throw new Error("NEXTAUTH_SECRET is not configured");
+}
 
 const handler = NextAuth({
   session: {
@@ -30,22 +35,82 @@ const handler = NextAuth({
         }
 
         const isAdminEmail = email === adminEmail.toLowerCase();
-        const isValidPassword = await bcrypt.compare(password, adminPasswordHash);
 
-        if (!isAdminEmail || !isValidPassword) {
+        if (isAdminEmail) {
+          const isValidAdminPassword = await bcrypt.compare(
+            password,
+            adminPasswordHash
+          );
+
+          if (!isValidAdminPassword) return null;
+
+          return {
+            id: "admin",
+            name: "Irvin Admin",
+            email,
+            role: "ADMIN",
+            plan: "admin",
+            active: true,
+            blocked: false,
+            expires_at: null,
+            sessionId: crypto.randomUUID(),
+          } as any;
+        }
+
+        const { data: user, error } = await supabaseAdmin
+          .from("app_users")
+          .select(
+            "id,email,name,password,plan,active,expires_at,active_session_id"
+          )
+          .eq("email", email)
+          .maybeSingle();
+
+        if (error) {
+          console.error("Login user lookup error:", error);
           return null;
         }
 
+        if (!user) return null;
+
+        if (user.active === false) return null;
+
+        if (user.expires_at && new Date(user.expires_at).getTime() < Date.now()) {
+          return null;
+        }
+
+        const isValidPassword = await bcrypt.compare(password, user.password);
+
+        if (!isValidPassword) return null;
+
+        const sessionId = crypto.randomUUID();
+
+        await supabaseAdmin
+          .from("app_users")
+          .update({
+            active_session_id: sessionId,
+            last_login_at: new Date().toISOString(),
+            last_seen_at: new Date().toISOString(),
+          })
+          .eq("id", user.id);
+
+        await supabaseAdmin.from("login_logs").insert({
+          user_id: user.id,
+          email: user.email,
+          role: "USER",
+          ip: null,
+          user_agent: null,
+        });
+
         return {
-          id: "admin",
-          name: "Irvin Admin",
-          email,
-          role: "ADMIN",
-          plan: "admin",
-          active: true,
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: "USER",
+          plan: user.plan,
+          active: user.active,
           blocked: false,
-          expires_at: null,
-          sessionId: crypto.randomUUID(),
+          expires_at: user.expires_at,
+          sessionId,
         } as any;
       },
     }),
