@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 import { rateLimit, getClientIp } from "@/lib/security";
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 let cachedData: any = null;
 let cachedAt = 0;
 
 const CACHE_TIME = 30000;
+const ALLOWED_PLANS = ["beta", "premium", "vip"];
 
 async function getValidToken(req: NextRequest) {
   const token = await getToken({
@@ -15,7 +16,22 @@ async function getValidToken(req: NextRequest) {
   });
 
   if (!token) return null;
-  if ((token as any).blocked) return null;
+
+  const role = String((token as any).role ?? "").toUpperCase();
+  const plan = String((token as any).plan ?? "").toLowerCase();
+  const blocked = (token as any).blocked === true;
+  const active = (token as any).active !== false;
+  const expiresAt = (token as any).expires_at ?? null;
+
+  if (blocked || !active) return null;
+
+  if (expiresAt && new Date(expiresAt).getTime() < Date.now()) {
+    return null;
+  }
+
+  if (role !== "ADMIN" && !ALLOWED_PLANS.includes(plan)) {
+    return null;
+  }
 
   return token as any;
 }
@@ -23,10 +39,13 @@ async function getValidToken(req: NextRequest) {
 async function updateLastSeen(token: any) {
   if (!token?.id || token.id === "admin") return;
 
-  await supabase
+  const sessionId = token.sessionId;
+
+  await supabaseAdmin
     .from("app_users")
     .update({ last_seen_at: new Date().toISOString() })
-    .eq("id", token.id);
+    .eq("id", token.id)
+    .eq("active_session_id", sessionId);
 }
 
 export async function GET(req: NextRequest) {
@@ -46,7 +65,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
 
-  updateLastSeen(token);
+  await updateLastSeen(token);
 
   const now = Date.now();
 
@@ -78,6 +97,10 @@ export async function GET(req: NextRequest) {
       }
     );
 
+    if (!res.ok) {
+      throw new Error(`API-Football HTTP ${res.status}`);
+    }
+
     const data = await res.json();
 
     if (data?.errors && Object.keys(data.errors).length > 0) {
@@ -97,6 +120,8 @@ export async function GET(req: NextRequest) {
       cachedAt,
     });
   } catch (error) {
+    console.error("Live API error:", error);
+
     if (cachedData) {
       return NextResponse.json({
         ...cachedData,

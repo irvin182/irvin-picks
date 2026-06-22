@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import bcrypt from "bcryptjs";
 import { Resend } from "resend";
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 export const dynamic = "force-dynamic";
 
@@ -166,7 +166,7 @@ export async function POST(req: NextRequest) {
       const stripeCustomerId = String(session.customer ?? "");
       const stripeSubscriptionId = String(session.subscription ?? "");
 
-      const { data: existingUser, error: lookupError } = await supabase
+      const { data: existingUser, error: lookupError } = await supabaseAdmin
         .from("app_users")
         .select("id,email")
         .eq("email", email)
@@ -175,7 +175,7 @@ export async function POST(req: NextRequest) {
       if (lookupError) throw lookupError;
 
       if (existingUser) {
-        const { error } = await supabase
+        const { error } = await supabaseAdmin
           .from("app_users")
           .update({
             plan,
@@ -195,7 +195,7 @@ export async function POST(req: NextRequest) {
         const rawPassword = generatePassword();
         const hashedPassword = await bcrypt.hash(rawPassword, 12);
 
-        const { error } = await supabase.from("app_users").insert({
+        const { error } = await supabaseAdmin.from("app_users").insert({
           email,
           name: email.split("@")[0],
           password: hashedPassword,

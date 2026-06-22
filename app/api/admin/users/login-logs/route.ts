@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 async function isAdmin(req: NextRequest) {
   const token = await getToken({
@@ -8,7 +8,7 @@ async function isAdmin(req: NextRequest) {
     secret: process.env.NEXTAUTH_SECRET,
   });
 
-  return (token as any)?.role === "ADMIN" || (token as any)?.plan === "admin";
+  return String((token as any)?.role ?? "").toUpperCase() === "ADMIN";
 }
 
 export async function GET(req: NextRequest) {
@@ -16,13 +16,14 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from("login_logs")
     .select("id,user_id,email,role,ip,user_agent,created_at")
     .order("created_at", { ascending: false })
     .limit(30);
 
   if (error) {
+    console.error("Error cargando login logs:", error);
     return NextResponse.json({ error: "Error cargando logs" }, { status: 500 });
   }
 
