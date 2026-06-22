@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 import bcrypt from "bcryptjs";
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 const ALLOWED_PLANS = ["beta", "premium", "vip"];
 
@@ -42,7 +42,7 @@ export async function GET(req: NextRequest) {
     return jsonError("No autorizado", 401);
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from("app_users")
     .select(USER_SELECT)
     .order("created_at", { ascending: false });
@@ -88,7 +88,7 @@ export async function POST(req: NextRequest) {
     return jsonError("Fecha de expiración inválida", 400);
   }
 
-  const { data: existingUser, error: existingError } = await supabase
+  const { data: existingUser, error: existingError } = await supabaseAdmin
     .from("app_users")
     .select("id")
     .eq("email", email)
@@ -105,7 +105,7 @@ export async function POST(req: NextRequest) {
 
   const passwordHash = await bcrypt.hash(password, 12);
 
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from("app_users")
     .insert({
       email,
@@ -203,7 +203,7 @@ export async function PATCH(req: NextRequest) {
     return jsonError("No hay cambios para actualizar", 400);
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from("app_users")
     .update(updateData)
     .eq("id", id)
@@ -230,7 +230,7 @@ export async function DELETE(req: NextRequest) {
     return jsonError("Falta id", 400);
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from("app_users")
     .delete()
     .eq("id", id)
