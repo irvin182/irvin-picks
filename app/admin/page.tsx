@@ -212,6 +212,59 @@ Plan: ${u.plan}`
     refreshAll();
   }
 
+
+async function updateUserPlan(user: User, newPlan: string) {
+  const res = await fetch("/api/admin/users", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      id: user.id,
+      plan: newPlan,
+    }),
+  });
+
+  const data = await res.json();
+
+  if (!res.ok) {
+    alert(data.error ?? "Error cambiando plan");
+    return;
+  }
+
+  refreshAll();
+}
+
+async function updateUserExpiry(user: User) {
+  const newDate = prompt(
+    `Nueva fecha de expiración para ${user.email}. Ejemplo: 2026-12-31. Déjalo vacío para no expirar.`,
+    user.expires_at ? user.expires_at.slice(0, 10) : ""
+  );
+
+  if (newDate === null) return;
+
+  const res = await fetch("/api/admin/users", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      id: user.id,
+      expires_at: newDate || null,
+    }),
+  });
+
+  const data = await res.json();
+
+  if (!res.ok) {
+    alert(data.error ?? "Error cambiando expiración");
+    return;
+  }
+
+  refreshAll();
+}
+
+
+
+
+
+
   async function resetPassword(user: User) {
     const newPassword = prompt(
       `Nueva contraseña para ${user.email}`,
@@ -536,6 +589,24 @@ Nueva contraseña: ${newPassword}`
                           </span>
                         </div>
                       </div>
+
+
+                      <select
+  value={u.plan}
+  onChange={(e) => updateUserPlan(u, e.target.value)}
+  className="bg-white/10 rounded-xl px-3 py-2 text-sm"
+>
+  <option value="beta">Beta</option>
+  <option value="premium">Premium</option>
+  <option value="vip">VIP</option>
+</select>
+
+<button
+  onClick={() => updateUserExpiry(u)}
+  className="bg-purple-500/20 text-purple-300 rounded-xl px-3 py-2 text-sm"
+>
+  📅 Expira
+</button>
 
                       <div className="mt-4 flex flex-wrap gap-2 justify-end">
                         {!isAdminUser && (
