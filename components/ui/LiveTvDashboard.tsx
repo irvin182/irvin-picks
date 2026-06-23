@@ -208,9 +208,13 @@ export default function LiveTvDashboard() {
 
   if (!selected) return null;
 
-  return (
-    <main className="min-h-screen bg-[#03070b] text-white overflow-hidden">
-      <div className="h-screen p-4 grid grid-rows-[64px_1fr_58px] gap-3">
+return (
+  <main className="h-screen bg-[#03070b] text-white overflow-hidden">
+    <div className="h-screen p-1 grid grid-rows-[46px_1fr_40px] gap-1 text-[85%]">
+
+
+
+
 <LiveHeader
   matchesCount={matches.length}
   lastUpdate={lastUpdate}
@@ -218,14 +222,14 @@ export default function LiveTvDashboard() {
   dataModeColor={dataModeColor}
 />
 
-        <section className="grid grid-cols-[360px_minmax(620px,1fr)_390px] gap-3 min-h-0">
+        <section className="grid grid-cols-[240px_minmax(0,1fr)_280px] gap-1 min-h-0">
 
         <MatchSelector
   matches={matches}
   selectedId={selected?.id ?? null}
   onSelect={setSelectedId}
 />
-          <section className="rounded-2xl border border-white/10 bg-[#07111c]/90 overflow-hidden grid grid-rows-[390px_1fr]">
+          <section className="rounded-2xl border border-white/10 bg-[#07111c]/90 overflow-hidden grid-rows-[320px_1fr]">
 
 <ScoreBoard selected={selected} prediction={prediction} />
 
@@ -332,10 +336,6 @@ export default function LiveTvDashboard() {
           </section>
 
 
-
-
-
-
      <IrvinAIPanel
   fixtureEvents={fixtureEvents}
   selected={selected}
@@ -347,18 +347,9 @@ export default function LiveTvDashboard() {
 />
 
 
-
-
-
-
-
-
-
-
-
         </section>
 
-        <footer className="rounded-2xl border border-white/10 bg-[#07111c]/90 grid grid-cols-[160px_1fr_1fr_1fr_220px] items-center overflow-hidden">
+        <footer className="rounded-2xl border border-white/10 bg-[#07111c]/90 grid grid-cols-[120px_1fr_1fr_1fr_180px] items-center overflow-hidden">
           <div className="h-full flex items-center justify-center text-yellow-400 font-black text-xl border-r border-white/10">
             🔔 ALERTAS
           </div>
@@ -378,8 +369,8 @@ export default function LiveTvDashboard() {
 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-xl border border-white/10 bg-[#030b13] p-4 overflow-hidden">
-      <h3 className="text-center text-white/50 font-bold text-sm">{title}</h3>
+    <div className="rounded-md border border-white/10 bg-[#030b13] p-1.5 overflow-hidden min-h-[105px]">
+      <h3 className="text-center text-white/50 font-bold text-[11px] leading-tight">{title}</h3>
       {children}
     </div>
   );
@@ -441,5 +432,9 @@ function Progress({ label, value, color }: { label: string; value: number; color
 }
 
 function Ticker({ text }: { text: string }) {
-  return <div className="h-full flex items-center px-6 border-r border-white/10 font-bold truncate">{text}</div>;
+  return (
+    <div className="h-full flex items-center px-2 border-r border-white/10 text-xs font-semibold truncate">
+      {text}
+    </div>
+  );
 }
