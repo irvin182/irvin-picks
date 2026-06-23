@@ -27,15 +27,34 @@ export default function AuthGuard({
 
         const user = session.user as any;
 
-        if (user?.blocked) {
-          alert("Tu sesión fue cerrada porque esta cuenta se abrió en otro dispositivo.");
-          await signOut({ callbackUrl: "/login" });
+        const role = String(user?.role ?? "").toUpperCase();
+        const plan = String(user?.plan ?? "").toLowerCase();
+        const blocked = user?.blocked === true;
+        const active = user?.active !== false;
+        const expiresAt = user?.expires_at ?? null;
+
+        if (blocked || !active) {
+          await signOut({ callbackUrl: "/login?error=account_disabled" });
           return;
         }
 
-        if (requireAdmin && user?.role !== "ADMIN") {
-          window.location.replace("/probador/TV");
+        if (expiresAt && new Date(expiresAt).getTime() < Date.now()) {
+          await signOut({ callbackUrl: "/pricing?error=expired" });
           return;
+        }
+
+        if (requireAdmin && role !== "ADMIN") {
+          window.location.replace("/live");
+          return;
+        }
+
+        if (!requireAdmin && role !== "ADMIN") {
+          const allowedPlans = ["beta", "premium", "vip"];
+
+          if (!allowedPlans.includes(plan)) {
+            window.location.replace("/pricing");
+            return;
+          }
         }
 
         if (mounted) {
@@ -62,8 +81,12 @@ export default function AuthGuard({
     return (
       <main className="min-h-screen bg-[#03070b] text-white flex items-center justify-center">
         <div className="text-center">
-          <div className="text-3xl font-black text-green-400">IRVIN ANALYTICS</div>
-          <div className="mt-4 text-white/60">Verificando acceso seguro...</div>
+          <div className="text-3xl font-black text-green-400">
+            IRVIN ANALYTICS
+          </div>
+          <div className="mt-4 text-white/60">
+            Verificando acceso seguro...
+          </div>
         </div>
       </main>
     );
