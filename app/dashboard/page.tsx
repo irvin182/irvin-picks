@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { signOut } from "next-auth/react";
 
 export default function DashboardPage() {
@@ -18,18 +17,16 @@ export default function DashboardPage() {
           <div className="mt-4 flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6">
             <div>
               <h1 className="text-5xl font-black">
-                Bienvenido al Panel Pro 👋
+                Centro de Control Pro 👋
               </h1>
               <p className="text-white/60 mt-3">
-                Centro premium de análisis deportivo, IA en vivo e informes.
+                Plataforma premium de análisis deportivo, IA en vivo e informes.
               </p>
             </div>
 
             <div className="rounded-2xl border border-green-400/30 bg-green-500/10 px-5 py-4">
               <p className="text-white/50 text-xs">ESTADO DEL SISTEMA</p>
-              <p className="text-green-400 font-black mt-1">
-                ● ONLINE
-              </p>
+              <p className="text-green-400 font-black mt-1">● ONLINE</p>
             </div>
           </div>
         </div>
@@ -38,7 +35,7 @@ export default function DashboardPage() {
           <Stat title="⚽ Partidos hoy" value="LIVE" text="Datos en tiempo real" pulse />
           <Stat title="🧠 Motor IA" value="ACTIVO" text="Poisson + Momentum" />
           <Stat title="🔥 Señales Pro" value="PREMIUM" text="BTTS / Over / Next Goal" />
-          <Stat title="🔒 Licencia" value="VALIDADA" text="Protegida por Stripe" />
+          <Stat title="🔒 Licencia" value="VALIDADA" text="JWT + Supabase" />
         </div>
 
         <div className="relative grid lg:grid-cols-3 gap-6">
@@ -59,15 +56,13 @@ export default function DashboardPage() {
 
               <div className="mt-8">
                 <p className="text-white/40 text-sm">PLAN</p>
-                <p className="text-3xl font-black text-white">
-                  PREMIUM AI
-                </p>
+                <p className="text-3xl font-black text-white">PREMIUM AI</p>
               </div>
 
               <div className="mt-8 grid grid-cols-2 gap-4">
                 <Info label="Estado" value="ACTIVA" green />
                 <Info label="Acceso" value="PRO" />
-                <Info label="Renovación" value="Stripe" />
+                <Info label="Motor" value="Poisson" />
                 <Info label="Seguridad" value="JWT" />
               </div>
 
@@ -76,37 +71,44 @@ export default function DashboardPage() {
               </div>
 
               <p className="text-white/40 text-xs mt-3">
-                Licencia válida y sincronizada con Stripe.
+                Licencia activa y protegida.
               </p>
             </div>
           </div>
 
           <div className="lg:col-span-2 grid md:grid-cols-2 gap-6">
             <Card
-              title="📺 TV EN VIVO"
-              text="Modo pantalla grande para seguir partidos, IA, momentum, estadísticas y eventos."
-              href="/probador/TV"
+              title="📺 LIVE TV"
+              text="Pantalla grande para seguir partidos, IA, momentum, estadísticas y eventos."
+              href="/live"
               button="ENTRAR AL LIVE"
               featured
             />
 
             <Card
               title="📄 INFORME DE HOY"
-              text="Genera informes premium con análisis avanzado, Poisson y mercados inteligentes."
-              href="/probador/informe-hoy"
-              button="ABRIR INFORME"
+              text="Informe premium con análisis avanzado, Poisson y mercados inteligentes."
+              href="/reports/today"
+              button="ABRIR HOY"
+            />
+
+            <Card
+              title="📆 INFORME DE MAÑANA"
+              text="Preparación anticipada de partidos, lectura previa y oportunidades."
+              href="/reports/tomorrow"
+              button="VER MAÑANA"
             />
 
             <Card
               title="🏀 INFORME BASKET"
               text="Módulo de baloncesto con análisis diario y lectura estadística."
-              href="/probador/informe-hoy-basket"
+              href="/reports/basket"
               button="VER BASKET"
             />
 
             <button
               onClick={() => signOut({ callbackUrl: "/" })}
-              className="rounded-[2rem] border border-red-500/30 bg-gradient-to-br from-red-500/15 to-black p-8 text-left hover:bg-red-500/20 transition"
+              className="md:col-span-2 rounded-[2rem] border border-red-500/30 bg-gradient-to-br from-red-500/15 to-black p-8 text-left hover:bg-red-500/20 transition"
             >
               <h3 className="text-2xl font-black text-red-400">
                 🚪 Cerrar sesión
@@ -149,9 +151,7 @@ function Stat({
           </span>
         )}
 
-        <h3 className="text-3xl font-black text-green-400">
-          {value}
-        </h3>
+        <h3 className="text-3xl font-black text-green-400">{value}</h3>
       </div>
 
       <p className="text-white/40 text-sm mt-2">{text}</p>
@@ -192,8 +192,8 @@ function Card({
   featured?: boolean;
 }) {
   return (
-    <Link
-      href={href}
+  <a
+  href={href}
       className={`group rounded-[2rem] border p-8 transition hover:scale-[1.01] ${
         featured
           ? "border-green-500/40 bg-gradient-to-br from-green-500/10 via-[#07111c] to-black shadow-[0_0_35px_rgba(0,255,120,.12)]"
@@ -202,13 +202,11 @@ function Card({
     >
       <h3 className="text-2xl font-black">{title}</h3>
 
-      <p className="text-white/55 mt-4 leading-7">
-        {text}
-      </p>
+      <p className="text-white/55 mt-4 leading-7">{text}</p>
 
       <div className="mt-8 inline-block rounded-2xl border border-green-400/40 px-5 py-3 text-green-300 font-black group-hover:bg-green-400 group-hover:text-black transition">
         {button}
       </div>
-    </Link>
+    </a>
   );
 }
