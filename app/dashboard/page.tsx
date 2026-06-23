@@ -16,12 +16,13 @@ export default function DashboardPage() {
 
           <div className="mt-4 flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6">
             <div>
-           <h1>
-SOY EL DASHBOARD NUEVO 🚀🚀🚀
+<h1 className="text-5xl font-black">
+  Centro de Control IA
 </h1>
-              <p className="text-white/60 mt-3">
-                Plataforma premium de análisis deportivo, IA en vivo e informes.
-              </p>
+
+<p className="text-white/60 mt-3">
+Analítica deportiva profesional con inteligencia artificial en tiempo real.
+</p>
             </div>
 
             <div className="rounded-2xl border border-green-400/30 bg-green-500/10 px-5 py-4">
@@ -37,6 +38,54 @@ SOY EL DASHBOARD NUEVO 🚀🚀🚀
           <Stat title="🔥 Señales Pro" value="PREMIUM" text="BTTS / Over / Next Goal" />
           <Stat title="🔒 Licencia" value="VALIDADA" text="JWT + Supabase" />
         </div>
+
+        <div className="relative mb-8 rounded-[2rem] border border-green-500/25 bg-gradient-to-r from-[#07111c] via-[#06131f] to-black p-6 shadow-[0_0_35px_rgba(0,255,120,.10)]">
+  <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+    <div>
+      <p className="text-green-400 font-black tracking-[4px] text-xs">
+        FÚTBOL EN VIVO
+      </p>
+
+      <h2 className="text-3xl font-black mt-2">
+        Sigue el partido desde tu plataforma oficial
+      </h2>
+
+      <p className="text-white/55 mt-3 max-w-2xl leading-7">
+        Irvin Analytics no retransmite señales de terceros. Puedes abrir tu
+        proveedor autorizado y usar esta pantalla junto con la IA, momentum,
+        xG, estadísticas y alertas en tiempo real.
+      </p>
+    </div>
+
+    <div className="rounded-3xl border border-white/10 bg-black/40 p-5 min-w-[280px]">
+      <div className="aspect-video rounded-2xl border border-green-500/20 bg-[#02060a] flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-4xl">📺</div>
+          <p className="font-black mt-2">Transmisión oficial</p>
+          <p className="text-white/40 text-xs mt-1">DAZN / FIFA+ / Operador autorizado</p>
+        </div>
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 gap-3">
+        <a
+          href="https://www.dazn.com/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="rounded-xl bg-green-500 text-black font-black text-center py-3 hover:bg-green-400 transition"
+        >
+          ABRIR DAZN
+        </a>
+
+        <a
+          href="/live"
+          className="rounded-xl border border-green-400/40 text-green-300 font-black text-center py-3 hover:bg-green-400 hover:text-black transition"
+        >
+          VER IA LIVE
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
 
         <div className="relative grid lg:grid-cols-3 gap-6">
           <div className="rounded-[2rem] border border-green-500/30 bg-gradient-to-br from-green-500/20 via-[#07111c] to-black p-8 shadow-[0_0_45px_rgba(0,255,120,.16)]">
