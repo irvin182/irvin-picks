@@ -721,13 +721,13 @@ function ProbadorContent() {
             </h1>
             <div className="flex gap-2">
               <Link
-                href="/probador/informe-hoy"
+                href="/reports/today"
                 className="px-3 py-2 rounded-xl bg-white text-black text-sm hover:bg-zinc-200"
               >
                 Informe de HOY
               </Link>
               <Link
-                href="/probador/informe-manana"
+                href="/reports/tomorrow"
                 className="px-3 py-2 rounded-xl bg-white/10 text-white text-sm hover:bg-zinc-200 hover:text-black"
               >
                 Informe de MAÑANA
