@@ -85,7 +85,7 @@ export default function DashboardPage() {
             <Card
               title="📺 TV EN VIVO"
               text="Modo pantalla grande para seguir partidos, IA, momentum, estadísticas y eventos."
-              href="/probador/TV"
+              href="/live"
               button="ENTRAR AL LIVE"
               featured
             />
@@ -93,16 +93,16 @@ export default function DashboardPage() {
             <Card
               title="📄 INFORME DE HOY"
               text="Genera informes premium con análisis avanzado, Poisson y mercados inteligentes."
-              href="/probador/informe-hoy"
+              href="/reports/today"
               button="ABRIR INFORME"
             />
 
-            <Card
-              title="🏀 INFORME BASKET"
-              text="Módulo de baloncesto con análisis diario y lectura estadística."
-              href="/probador/informe-hoy-basket"
-              button="VER BASKET"
-            />
+          <Card
+  title="🏀 INFORME BASKET"
+  text="Módulo de baloncesto con análisis diario y lectura estadística."
+  href="/reports/basket"
+  button="VER BASKET"
+/>
 
             <button
               onClick={() => signOut({ callbackUrl: "/" })}

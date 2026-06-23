@@ -16,9 +16,9 @@ export default function DashboardPage() {
 
           <div className="mt-4 flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6">
             <div>
-              <h1 className="text-5xl font-black">
-                Centro de Control Pro 👋
-              </h1>
+           <h1>
+SOY EL DASHBOARD NUEVO 🚀🚀🚀
+</h1>
               <p className="text-white/60 mt-3">
                 Plataforma premium de análisis deportivo, IA en vivo e informes.
               </p>
