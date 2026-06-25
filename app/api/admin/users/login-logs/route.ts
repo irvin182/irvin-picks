@@ -1,9 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
-import bcrypt from "bcryptjs";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
-
-console.log("ADMIN USERS ROUTE LOADED");
 
 async function isAdmin(req: NextRequest) {
   const token = await getToken({

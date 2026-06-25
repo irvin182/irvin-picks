@@ -58,8 +58,12 @@ async function sendWelcomeEmail({
   isNewUser: boolean;
 }) {
   const resend = getResend();
-  const loginUrl =
-    process.env.NEXT_PUBLIC_SITE_URL || "https://irvin-picks.vercel.app/login";
+  const baseUrl = (
+  process.env.NEXT_PUBLIC_SITE_URL || "https://irvin-picks.vercel.app"
+).replace(/\/$/, "");
+
+const loginUrl = `${baseUrl}/login`;
+
 
   await resend.emails.send({
     from: process.env.EMAIL_FROM || "Irvin Analytics <onboarding@resend.dev>",

@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getToken } from "next-auth/jwt";
+import { rateLimit, getClientIp } from "@/lib/security";
 
 type CacheValue = {
   data: any;
@@ -7,8 +9,52 @@ type CacheValue = {
 
 const CACHE_TIME = 60000;
 const cache = new Map<string, CacheValue>();
+const ALLOWED_PLANS = ["beta", "premium", "vip"];
+
+async function getValidToken(req: NextRequest) {
+  const token = await getToken({
+    req,
+    secret: process.env.NEXTAUTH_SECRET,
+  });
+
+  if (!token) return null;
+
+  const role = String((token as any).role ?? "").toUpperCase();
+  const plan = String((token as any).plan ?? "").toLowerCase();
+  const blocked = (token as any).blocked === true;
+  const active = (token as any).active !== false;
+  const expiresAt = (token as any).expires_at ?? null;
+
+  if (blocked || !active) return null;
+
+  if (expiresAt && new Date(expiresAt).getTime() < Date.now()) {
+    return null;
+  }
+
+  if (role !== "ADMIN" && !ALLOWED_PLANS.includes(plan)) {
+    return null;
+  }
+
+  return token;
+}
 
 export async function GET(req: NextRequest) {
+  const ip = getClientIp(req);
+  const limited = rateLimit(`fixture:${ip}`, 120, 60_000);
+
+  if (!limited.ok) {
+    return NextResponse.json(
+      { error: "Demasiadas peticiones. Intenta de nuevo en un momento." },
+      { status: 429 }
+    );
+  }
+
+  const token = await getValidToken(req);
+
+  if (!token) {
+    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  }
+
   const API_KEY = process.env.APIFOOTBALL_KEY;
 
   if (!API_KEY) {
@@ -61,6 +107,12 @@ export async function GET(req: NextRequest) {
       ),
     ]);
 
+    if (!statisticsRes.ok || !eventsRes.ok) {
+      throw new Error(
+        `API-Football error statistics=${statisticsRes.status} events=${eventsRes.status}`
+      );
+    }
+
     const statisticsJson = await statisticsRes.json();
     const eventsJson = await eventsRes.json();
 
@@ -83,6 +135,8 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json(payload);
   } catch (error) {
+    console.error("Fixture API error:", error);
+
     if (cached) {
       return NextResponse.json({
         ...cached.data,

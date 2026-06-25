@@ -1,4 +1,4 @@
-// app/probador/informe-hoy/page.tsx
+// app/reports/today/page.tsx
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";

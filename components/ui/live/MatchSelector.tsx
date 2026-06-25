@@ -61,14 +61,22 @@ export default function MatchSelector({
 
               <div className="flex items-center gap-2 text-lg truncate">
                 {m.homeFlag ? (
-                  <img src={m.homeFlag} alt={m.home} className="w-5 h-5 object-contain" />
+                  <img
+                    src={m.homeFlag}
+                    alt={m.home}
+                    className="w-5 h-5 object-contain"
+                  />
                 ) : null}
                 <span className="truncate">{m.home}</span>
               </div>
 
               <div className="flex items-center gap-2 text-lg truncate">
                 {m.awayFlag ? (
-                  <img src={m.awayFlag} alt={m.away} className="w-5 h-5 object-contain" />
+                  <img
+                    src={m.awayFlag}
+                    alt={m.away}
+                    className="w-5 h-5 object-contain"
+                  />
                 ) : null}
                 <span className="truncate">{m.away}</span>
               </div>

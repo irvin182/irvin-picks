@@ -17,7 +17,7 @@ league?: {
   country?: string;
   logo?: string;
   flag?: string;
-};
+};  
   teams?: {
     home?: { name?: string; logo?: string };
     away?: { name?: string; logo?: string };

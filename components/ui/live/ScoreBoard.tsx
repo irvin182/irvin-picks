@@ -1,3 +1,5 @@
+import React from "react";
+
 export default function ScoreBoard({
   selected,
   prediction,
@@ -8,34 +10,28 @@ export default function ScoreBoard({
   return (
     <div className="relative p-6 border-b border-white/10 bg-[radial-gradient(circle_at_center,#10243a_0%,#07111c_60%,#03070b_100%)]">
       <div className="text-center text-white/60 font-bold">
-        {String(selected.league || "Liga").toUpperCase()}
+        {selected.league.toUpperCase()}
       </div>
 
       <div className="absolute top-24 left-10 text-center max-w-[220px]">
-        {selected.homeFlag ? (
-          <img
-            src={selected.homeFlag}
-            alt={selected.home}
-            className="w-24 h-24 object-contain mx-auto"
-          />
-        ) : null}
-
+        <img
+          src={selected.homeFlag}
+          alt={selected.home}
+          className="w-24 h-24 object-contain mx-auto"
+        />
         <div className="text-3xl font-black mt-3 truncate">
-          {String(selected.home || "LOCAL").toUpperCase()}
+          {selected.home.toUpperCase()}
         </div>
       </div>
 
       <div className="absolute top-24 right-10 text-center max-w-[220px]">
-        {selected.awayFlag ? (
-          <img
-            src={selected.awayFlag}
-            alt={selected.away}
-            className="w-24 h-24 object-contain mx-auto"
-          />
-        ) : null}
-
+        <img
+          src={selected.awayFlag}
+          alt={selected.away}
+          className="w-24 h-24 object-contain mx-auto"
+        />
         <div className="text-3xl font-black mt-3 truncate">
-          {String(selected.away || "VISITANTE").toUpperCase()}
+          {selected.away.toUpperCase()}
         </div>
       </div>
 
@@ -68,11 +64,9 @@ export default function ScoreBoard({
           <div className="bg-green-500 flex items-center justify-center">
             {prediction?.homeWin ?? 0}%
           </div>
-
           <div className="bg-slate-500 flex items-center justify-center">
             {prediction?.draw ?? 0}%
           </div>
-
           <div className="bg-blue-600 flex items-center justify-center">
             {prediction?.awayWin ?? 0}%
           </div>

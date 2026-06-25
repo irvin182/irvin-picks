@@ -9,33 +9,44 @@ const PRICES: Record<string, { name: string; amount: number }> = {
   vip: { name: "Irvin Analytics VIP", amount: 3990 },
 };
 
+function getStripe() {
+  const secretKey = process.env.STRIPE_SECRET_KEY;
+
+  if (!secretKey) {
+    throw new Error("STRIPE_SECRET_KEY is not configured");
+  }
+
+  return new Stripe(secretKey);
+}
+
+function getBaseUrl() {
+  const baseUrl =
+    process.env.NEXT_PUBLIC_SITE_URL || "https://irvin-picks.vercel.app";
+
+  return baseUrl.replace(/\/$/, "");
+}
+
 async function createCheckout(req: NextRequest) {
   try {
-    const secretKey = process.env.STRIPE_SECRET_KEY;
-
-    if (!secretKey) {
-      return NextResponse.json(
-        { error: "Falta STRIPE_SECRET_KEY en Vercel" },
-        { status: 500 }
-      );
-    }
-
-    const stripe = new Stripe(secretKey);
+    const stripe = getStripe();
 
     const { searchParams } = new URL(req.url);
-    const plan = searchParams.get("plan") || "premium";
+    const plan = String(searchParams.get("plan") ?? "premium")
+      .toLowerCase()
+      .trim();
+
     const selected = PRICES[plan];
 
     if (!selected) {
       return NextResponse.json({ error: "Plan inválido" }, { status: 400 });
     }
 
-    const baseUrl =
-      process.env.NEXT_PUBLIC_SITE_URL || "https://irvin-picks.vercel.app";
+    const baseUrl = getBaseUrl();
 
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
       payment_method_types: ["card"],
+
       line_items: [
         {
           price_data: {
@@ -51,13 +62,34 @@ async function createCheckout(req: NextRequest) {
           quantity: 1,
         },
       ],
+
       success_url: `${baseUrl}/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${baseUrl}/cancel`,
-      metadata: { plan },
+
+      metadata: {
+        plan,
+        source: "irvin_analytics_checkout",
+      },
+
+      subscription_data: {
+        metadata: {
+          plan,
+          source: "irvin_analytics_subscription",
+        },
+      },
     });
 
-    return NextResponse.redirect(session.url as string);
+    if (!session.url) {
+      return NextResponse.json(
+        { error: "Stripe no devolvió URL de pago" },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.redirect(session.url);
   } catch (error: any) {
+    console.error("Stripe checkout error:", error);
+
     return NextResponse.json(
       {
         error: "Error creando checkout de Stripe",
