@@ -19,33 +19,44 @@ async function getValidToken(req: NextRequest) {
 
   const role = String((token as any).role ?? "").toUpperCase();
   const plan = String((token as any).plan ?? "").toLowerCase();
-  const blocked = (token as any).blocked === true;
-  const active = (token as any).active !== false;
-  const expiresAt = (token as any).expires_at ?? null;
 
-  if (blocked || !active) return null;
+  if (role === "ADMIN") return token as any;
 
-  if (expiresAt && new Date(expiresAt).getTime() < Date.now()) {
+  if (!ALLOWED_PLANS.includes(plan)) return null;
+
+  const userId = (token as any).id;
+  const sessionId = (token as any).sessionId;
+
+  if (!userId || !sessionId) return null;
+
+  const { data: user, error } = await supabaseAdmin
+    .from("app_users")
+    .select("active,blocked,expires_at,active_session_id")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (error || !user) return null;
+
+  if (user.active === false || user.blocked === true) return null;
+
+  if (
+    user.expires_at &&
+    new Date(user.expires_at).getTime() < Date.now()
+  ) {
     return null;
   }
 
-  if (role !== "ADMIN" && !ALLOWED_PLANS.includes(plan)) {
+  if (user.active_session_id !== sessionId) {
     return null;
   }
-
-  return token as any;
-}
-
-async function updateLastSeen(token: any) {
-  if (!token?.id || token.id === "admin") return;
-
-  const sessionId = token.sessionId;
 
   await supabaseAdmin
     .from("app_users")
     .update({ last_seen_at: new Date().toISOString() })
-    .eq("id", token.id)
+    .eq("id", userId)
     .eq("active_session_id", sessionId);
+
+  return token as any;
 }
 
 export async function GET(req: NextRequest) {
@@ -62,10 +73,11 @@ export async function GET(req: NextRequest) {
   const token = await getValidToken(req);
 
   if (!token) {
-    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    return NextResponse.json(
+      { error: "Sesión inválida o reemplazada" },
+      { status: 401 }
+    );
   }
-
-  await updateLastSeen(token);
 
   const now = Date.now();
 

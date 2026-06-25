@@ -59,7 +59,14 @@ const handler = NextAuth({
 
         const { data: user, error } = await supabaseAdmin
           .from("app_users")
-          .select("id,email,name,password,plan,active,expires_at,active_session_id")
+
+
+
+  .select(
+  "id,email,name,password,plan,active,blocked,expires_at,active_session_id,last_seen_at"
+)
+
+
           .eq("email", email)
           .maybeSingle();
 
@@ -70,12 +77,48 @@ const handler = NextAuth({
 
         if (!user) return null;
         if (user.active === false) return null;
+        if (user.blocked === true) return null;
 
-        if (user.expires_at && new Date(user.expires_at).getTime() < Date.now()) {
+        if (
+          user.expires_at &&
+          new Date(user.expires_at).getTime() < Date.now()
+        ) {
           return null;
         }
 
-        // TEMPORAL: deja entrar al usuario si existe y está activo.
+        let isValidPassword = false;
+
+        try {
+          isValidPassword = await bcrypt.compare(password, user.password);
+        } catch {
+          isValidPassword = false;
+        }
+
+        if (!isValidPassword && password === user.password) {
+          isValidPassword = true;
+
+          const newHash = await bcrypt.hash(password, 10);
+
+          await supabaseAdmin
+            .from("app_users")
+            .update({ password: newHash })
+            .eq("id", user.id);
+        }
+
+        if (!isValidPassword) return null;
+
+if (user.active_session_id && user.last_seen_at) {
+  const lastSeen = new Date(user.last_seen_at).getTime();
+  const activeLimit = Date.now() - 15 * 1000;
+
+  if (lastSeen > oneMinuteAgo) {
+    console.log("Usuario ya conectado:", user.email);
+    return null;
+  }
+}
+
+
+
         const sessionId = crypto.randomUUID();
 
         await supabaseAdmin
@@ -102,7 +145,7 @@ const handler = NextAuth({
           role: "USER",
           plan: user.plan,
           active: user.active,
-          blocked: false,
+          blocked: user.blocked ?? false,
           expires_at: user.expires_at,
           sessionId,
         } as any;
@@ -124,6 +167,38 @@ const handler = NextAuth({
         token.blocked = (user as any).blocked;
         token.expires_at = (user as any).expires_at;
         token.sessionId = (user as any).sessionId;
+        token.forceLogout = false;
+      }
+
+      if (token.role === "USER" && token.id && token.sessionId) {
+        const { data: dbUser } = await supabaseAdmin
+          .from("app_users")
+          .select("active,blocked,expires_at,active_session_id")
+          .eq("id", token.id as string)
+          .maybeSingle();
+
+        if (!dbUser) {
+          token.forceLogout = true;
+          return token;
+        }
+
+        if (dbUser.active === false || dbUser.blocked === true) {
+          token.forceLogout = true;
+          return token;
+        }
+
+        if (
+          dbUser.expires_at &&
+          new Date(dbUser.expires_at).getTime() < Date.now()
+        ) {
+          token.forceLogout = true;
+          return token;
+        }
+
+        if (dbUser.active_session_id !== token.sessionId) {
+          token.forceLogout = true;
+          return token;
+        }
       }
 
       return token;
@@ -138,6 +213,7 @@ const handler = NextAuth({
         (session.user as any).blocked = token.blocked;
         (session.user as any).expires_at = token.expires_at;
         (session.user as any).sessionId = token.sessionId;
+        (session.user as any).forceLogout = token.forceLogout;
       }
 
       return session;

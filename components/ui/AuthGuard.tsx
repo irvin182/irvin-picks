@@ -28,13 +28,19 @@ export default function AuthGuard({
         const user = session.user as any;
 
         const sessionCheck = await fetch("/api/auth/check-session", {
-  cache: "no-store",
-});
+          cache: "no-store",
+        });
 
-if (!sessionCheck.ok) {
-  await signOut({ callbackUrl: "/login?error=session_replaced" });
-  return;
-}
+        const sessionData = await sessionCheck.json().catch(() => null);
+
+        if (
+          !sessionCheck.ok ||
+          sessionData?.valid === false ||
+          user?.forceLogout === true
+        ) {
+          await signOut({ callbackUrl: "/login?error=session_replaced" });
+          return;
+        }
 
         const role = String(user?.role ?? "").toUpperCase();
         const plan = String(user?.plan ?? "").toLowerCase();
@@ -53,7 +59,7 @@ if (!sessionCheck.ok) {
         }
 
         if (requireAdmin && role !== "ADMIN") {
-          window.location.replace("/live");
+          window.location.replace("/dashboard");
           return;
         }
 
@@ -78,7 +84,7 @@ if (!sessionCheck.ok) {
 
     checkSession();
 
-    const interval = setInterval(checkSession, 30000);
+    const interval = setInterval(checkSession, 5000);
 
     return () => {
       mounted = false;
