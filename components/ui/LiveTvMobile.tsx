@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { calculateLivePoisson } from "@/lib/livePoisson";
+import LiveMobileHeader from "./live/LiveMobileHeader";
 
 type Match = {
   id: number;
@@ -19,7 +20,7 @@ type Match = {
   awayFlag: string;
   apiUpdatedAt: number;
 };
-
+const SELECTED_MATCH_STORAGE_KEY = "irvin_analytics_selected_match_id";
 function mapApiFixtureToMatch(fx: any): Match {
   const elapsed = fx.fixture?.status?.elapsed ?? 0;
   const short = fx.fixture?.status?.short ?? "LIVE";
@@ -104,38 +105,95 @@ export default function LiveTvMobile() {
     return () => clearInterval(timer);
   }, []);
 
-  useEffect(() => {
-    async function loadLive() {
-      try {
-        const res = await fetch("/api/live", { cache: "no-store" });
-        const data = await res.json();
+async function loadLive() {
+  try {
+    setLoading(true);
+    setFixtureStats([]);
+    setFixtureEvents([]);
 
-        const liveGames = Array.isArray(data.response)
-          ? data.response.map(mapApiFixtureToMatch)
-          : [];
+    const res = await fetch(`/api/live?t=${Date.now()}`, {
+      cache: "no-store",
+    });
 
-        setMatches(liveGames);
+    const data = await res.json();
 
-        if (liveGames.length > 0) {
-          setSelected((current) => {
-            if (!current) return liveGames[0];
-            return liveGames.find((m: Match) => m.id === current.id) ?? liveGames[0];
-          });
-        } else {
-          setSelected(null);
+    const liveGames = Array.isArray(data.response)
+      ? data.response.map(mapApiFixtureToMatch)
+      : [];
+
+    setMatches(liveGames);
+
+    if (liveGames.length > 0) {
+      setSelected((current) => {
+        const savedId =
+          typeof window !== "undefined"
+            ? Number(localStorage.getItem(SELECTED_MATCH_STORAGE_KEY))
+            : 0;
+
+        const currentId = current?.id ?? savedId;
+
+        const nextSelected =
+          liveGames.find((m: Match) => m.id === currentId) ?? liveGames[0];
+
+        if (typeof window !== "undefined") {
+          localStorage.setItem(
+            SELECTED_MATCH_STORAGE_KEY,
+            String(nextSelected.id)
+          );
         }
 
-        setLoading(false);
-      } catch (error) {
-        console.error("loadLive", error);
-        setLoading(false);
-      }
+        return nextSelected;
+      });
+    } else {
+      setSelected(null);
     }
 
-    loadLive();
-    const interval = setInterval(loadLive, 30000);
-    return () => clearInterval(interval);
-  }, []);
+    setLoading(false);
+  } catch (error) {
+    console.error("loadLive", error);
+    setLoading(false);
+  }
+}
+
+useEffect(() => {
+  loadLive();
+  const interval = setInterval(loadLive, 30000);
+  return () => clearInterval(interval);
+}, []);
+
+
+async function handleManualRefresh() {
+  await loadLive();
+
+  const currentId =
+    selected?.id ??
+    Number(localStorage.getItem(SELECTED_MATCH_STORAGE_KEY));
+
+  if (!currentId) return;
+
+  try {
+    setFixtureStats([]);
+    setFixtureEvents([]);
+
+    const res = await fetch(`/api/fixture?id=${currentId}&t=${Date.now()}`, {
+      cache: "no-store",
+    });
+
+    const data = await res.json();
+
+    setFixtureStats(data.statistics ?? []);
+    setFixtureEvents(data.events ?? []);
+  } catch (error) {
+    console.error("Error refrescando partido manualmente:", error);
+  }
+}
+
+
+
+
+
+
+
 
   useEffect(() => {
     if (!selected) return;
@@ -276,22 +334,22 @@ export default function LiveTvMobile() {
 
   return (
     <main className="min-h-[100dvh] bg-[#03070b] text-white px-4 pt-4 pb-24 space-y-4 overflow-y-auto">
-      <header className="rounded-3xl bg-[#07111c] border border-white/10 p-4 flex items-center gap-4 shadow-2xl">
-        <img
-          src="/logo-irvin.png"
-          alt="Irvin Analytics"
-          className="w-16 h-16 rounded-2xl object-contain bg-black p-2 border border-cyan-400/30 shadow-lg"
-        />
+      
+      
+      
+<LiveMobileHeader
+  matchesCount={matches.length}
+  loading={loading}
+  onRefresh={handleManualRefresh}
+/>
 
-        <div className="min-w-0">
-          <div className="text-2xl font-black text-green-400 leading-none truncate">
-            IRVIN ANALYTICS
-          </div>
-          <div className="text-white/50 text-sm mt-2">
-            Modo móvil · {matches.length} partidos en vivo
-          </div>
-        </div>
-      </header>
+
+
+
+
+
+
+
 
       <section className="rounded-3xl border border-white/10 p-5 text-center shadow-2xl bg-[radial-gradient(circle_at_center,#10243a_0%,#07111c_55%,#03070b_100%)]">
         <div className="text-white/50 font-black text-sm">
@@ -353,7 +411,10 @@ export default function LiveTvMobile() {
           {matches.map((m) => (
             <button
               key={m.id}
-              onClick={() => setSelected(m)}
+              onClick={() => {
+  setSelected(m);
+  localStorage.setItem(SELECTED_MATCH_STORAGE_KEY, String(m.id));
+}}
               className={`min-w-[230px] rounded-2xl p-3 border text-left ${
                 selected.id === m.id
                   ? "bg-green-500/15 border-green-400/50"
@@ -509,7 +570,10 @@ export default function LiveTvMobile() {
                   {games.map((m) => (
                     <button
                       key={m.id}
-                      onClick={() => setSelected(m)}
+                      onClick={() => {
+  setSelected(m);
+  localStorage.setItem(SELECTED_MATCH_STORAGE_KEY, String(m.id));
+}}
                       className={`w-full rounded-xl p-3 grid grid-cols-[52px_1fr_64px] items-center gap-2 ${
                         selected.id === m.id
                           ? "bg-green-500/15 border border-green-400/40"
