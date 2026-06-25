@@ -160,7 +160,7 @@ export default function DashboardPage() {
                 </a>
 
                 <a
-                  href="/live"
+                 href="/live"
                   className="rounded-xl border border-green-400/40 text-green-300 font-black text-center py-3 hover:bg-green-400 hover:text-black transition"
                 >
                   VER IA LIVE

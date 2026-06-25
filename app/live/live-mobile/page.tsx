@@ -3,15 +3,15 @@
 import dynamic from "next/dynamic";
 import AuthGuard from "@/components/ui/AuthGuard";
 
-const LiveTvDashboard = dynamic(
-  () => import("@/components/ui/LiveTvDashboard"),
+const LiveTvMobile = dynamic(
+  () => import("@/components/ui/live/LiveTvMobile"),
   { ssr: false }
 );
 
 export default function Page() {
   return (
     <AuthGuard>
-      <LiveTvDashboard />
+      <LiveTvMobile />
     </AuthGuard>
   );
 }

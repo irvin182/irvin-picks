@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { calculateLivePoisson } from "@/lib/livePoisson";
 import LiveMobileHeader from "./live/LiveMobileHeader";
+import MobileMatchSelector from "./live/MobileMatchSelector";
 
 type Match = {
   id: number;
@@ -401,36 +402,34 @@ async function handleManualRefresh() {
         </div>
       </section>
 
-      <section className="rounded-3xl bg-[#07111c] border border-white/10 p-4 shadow-2xl">
-        <div className="flex items-center justify-between mb-3">
-          <div className="font-black text-white/80">Cambiar partido</div>
-          <div className="text-green-400 font-black text-sm">{matches.length} LIVE</div>
-        </div>
 
-        <div className="flex gap-2 overflow-x-auto pb-1">
-          {matches.map((m) => (
-            <button
-              key={m.id}
-              onClick={() => {
-  setSelected(m);
-  localStorage.setItem(SELECTED_MATCH_STORAGE_KEY, String(m.id));
-}}
-              className={`min-w-[230px] rounded-2xl p-3 border text-left ${
-                selected.id === m.id
-                  ? "bg-green-500/15 border-green-400/50"
-                  : "bg-white/5 border-white/10"
-              }`}
-            >
-              <div className="flex justify-between items-center gap-2">
-                <span className="text-green-400 font-black">{getLiveMinute(m, tick)}</span>
-                <span className="font-black">{m.homeScore}-{m.awayScore}</span>
-              </div>
-              <div className="mt-2 text-sm font-bold truncate">{m.home}</div>
-              <div className="text-sm font-bold truncate text-white/60">{m.away}</div>
-            </button>
-          ))}
-        </div>
-      </section>
+
+
+
+
+<MobileMatchSelector
+  matches={matches}
+  selectedId={selected.id}
+  tick={tick}
+  getLiveMinute={getLiveMinute}
+  onSelect={(m) => {
+    setSelected(m);
+
+    localStorage.setItem(
+      SELECTED_MATCH_STORAGE_KEY,
+      String(m.id)
+    );
+  }}
+/>
+
+
+
+
+
+
+
+
+
 
       <section className="grid grid-cols-3 gap-2">
         <Box title="1" value={`${prediction.homeWin}%`} />
