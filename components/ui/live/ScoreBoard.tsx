@@ -13,7 +13,7 @@ export default function ScoreBoard({
 
   return (
     <div className="h-full rounded-2xl border border-white/10 bg-[radial-gradient(circle_at_center,#10243a_0%,#07111c_58%,#03070b_100%)] px-5 py-3 overflow-hidden">
-      <div className="h-full grid grid-rows-[22px_1fr_44px] gap-2">
+     <div className="h-full grid grid-rows-[22px_120px_44px] gap-2">
         <div className="text-center text-white/45 font-black text-[11px] tracking-widest truncate">
           {selected.league.toUpperCase()}
         </div>
