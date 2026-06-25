@@ -179,7 +179,7 @@ export default function LiveTvDashboard() {
 
   return (
     <main className="h-screen bg-[#03070b] text-white overflow-hidden">
-      <div className="h-screen p-1 grid grid-rows-[46px_1fr_40px] gap-1 text-[85%]">
+      <div className="h-screen p-2 grid grid-rows-[64px_minmax(0,1fr)_38px] gap-2 text-[85%]">
         <LiveHeader
           matchesCount={matches.length}
           lastUpdate={lastUpdate}
@@ -187,16 +187,17 @@ export default function LiveTvDashboard() {
           dataModeColor={dataModeColor}
         />
 
-        <section className="grid grid-cols-[170px_minmax(0,1fr)_280px] gap-2 min-h-0">
+        <section className="grid grid-cols-[220px_minmax(0,1fr)_300px] gap-2 min-h-0">
           <MatchSelector
             matches={matches}
             selectedId={selected?.id ?? null}
             onSelect={setSelectedId}
           />
-<section className="rounded-2xl border border-white/10 bg-[#07111c]/90 overflow-hidden grid grid-rows-[180px_minmax(0,1fr)] min-h-0">
+
+          <section className="rounded-2xl border border-white/10 bg-[#07111c]/90 overflow-hidden grid grid-rows-[145px_minmax(0,1fr)] min-h-0">
             <ScoreBoard selected={selected} prediction={prediction} />
 
-            <div className="p-3 grid grid-cols-3 gap-3 overflow-y-auto min-h-0">
+            <div className="p-2 grid grid-cols-3 gap-2 overflow-y-auto min-h-0">
               <Card title="GOLES ESPERADOS (xG)">
                 {!hasStats ? (
                   <div className="h-full flex items-center justify-center text-white/40 text-sm text-center">
@@ -213,7 +214,7 @@ export default function LiveTvDashboard() {
               <Card title="POSESIÓN">
                 <div className="flex items-center justify-center gap-8 h-full">
                   <span className="text-3xl font-black">{homePossession}</span>
-                  <div className="w-24 h-24 rounded-full border-[18px] border-green-500 border-r-blue-600" />
+                  <div className="w-20 h-20 rounded-full border-[16px] border-green-500 border-r-blue-600" />
                   <span className="text-3xl font-black">{awayPossession}</span>
                 </div>
               </Card>
@@ -229,10 +230,7 @@ export default function LiveTvDashboard() {
                     style={{
                       width: `${Math.min(
                         100,
-                        Math.max(
-                          8,
-                          (homeShots / Math.max(1, homeShots + awayShots)) * 100
-                        )
+                        Math.max(8, (homeShots / Math.max(1, homeShots + awayShots)) * 100)
                       )}%`,
                     }}
                   />
@@ -354,7 +352,7 @@ export default function LiveTvDashboard() {
 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-md border border-white/10 bg-[#030b13] p-1.5 overflow-hidden min-h-[105px]">
+    <div className="rounded-md border border-white/10 bg-[#030b13] p-1.5 overflow-hidden min-h-[90px]">
       <h3 className="text-center text-white/50 font-bold text-[11px] leading-tight">
         {title}
       </h3>
