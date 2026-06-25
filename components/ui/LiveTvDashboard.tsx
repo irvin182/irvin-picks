@@ -194,7 +194,7 @@ export default function LiveTvDashboard() {
             onSelect={setSelectedId}
           />
 
-          <section className="rounded-2xl border border-white/10 bg-[#07111c]/90 overflow-hidden grid grid-rows-[130px_minmax(0,1fr)] min-h-0">
+          <section className="rounded-2xl border border-white/10 bg-[#07111c]/90 overflow-hidden grid grid-rows-[150px_minmax(0,1fr)] min-h-0">
             <ScoreBoard selected={selected} prediction={prediction} />
 
             <div className="p-2 grid grid-cols-3 gap-2 overflow-y-auto min-h-0">
