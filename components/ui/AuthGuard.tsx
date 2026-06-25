@@ -27,6 +27,15 @@ export default function AuthGuard({
 
         const user = session.user as any;
 
+        const sessionCheck = await fetch("/api/auth/check-session", {
+  cache: "no-store",
+});
+
+if (!sessionCheck.ok) {
+  await signOut({ callbackUrl: "/login?error=session_replaced" });
+  return;
+}
+
         const role = String(user?.role ?? "").toUpperCase();
         const plan = String(user?.plan ?? "").toLowerCase();
         const blocked = user?.blocked === true;

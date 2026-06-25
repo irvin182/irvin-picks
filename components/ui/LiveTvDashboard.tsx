@@ -5,12 +5,10 @@ import { calculateLivePoisson } from "@/lib/livePoisson";
 
 type Match = {
   id: number;
-  minute: string;
   minuteNumber: number;
   half: string;
   league: string;
   country: string;
-  leagueLogo: string;
   home: string;
   away: string;
   homeScore: number;
@@ -21,17 +19,12 @@ type Match = {
 };
 
 function mapApiFixtureToMatch(fx: any): Match {
-  const elapsed = fx.fixture?.status?.elapsed ?? 0;
-  const short = fx.fixture?.status?.short ?? "LIVE";
-
   return {
-    id: fx.fixture.id,
-    minute: short === "HT" ? "HT" : `${elapsed}'`,
-    minuteNumber: elapsed,
-    half: short,
+    id: fx.fixture?.id,
+    minuteNumber: fx.fixture?.status?.elapsed ?? 0,
+    half: fx.fixture?.status?.short ?? "LIVE",
     league: fx.league?.name ?? "Liga",
     country: fx.league?.country ?? "World",
-    leagueLogo: fx.league?.logo ?? "",
     home: fx.teams?.home?.name ?? "Local",
     away: fx.teams?.away?.name ?? "Visitante",
     homeScore: fx.goals?.home ?? 0,
@@ -52,6 +45,14 @@ function toNumber(value: any) {
   return Number(String(value).replace("%", "")) || 0;
 }
 
+function getLiveMinute(match: Match, tick: number) {
+  if (match.half === "HT") return "HT";
+  if (match.half === "FT") return "FT";
+  const secondsPassed = Math.floor((tick - match.apiUpdatedAt) / 1000);
+  const extraMinutes = Math.floor(secondsPassed / 60);
+  return `${Math.min(match.minuteNumber + extraMinutes, 90)}'`;
+}
+
 function eventIcon(type: string) {
   if (type === "Goal") return "⚽";
   if (type === "Card") return "🟨";
@@ -59,79 +60,49 @@ function eventIcon(type: string) {
   return "•";
 }
 
-function getLiveMinute(match: Match, tick: number) {
-  if (match.half === "HT") return "HT";
-  if (match.half === "FT") return "FT";
-
-  const secondsPassed = Math.floor((tick - match.apiUpdatedAt) / 1000);
-  const extraMinutes = Math.floor(secondsPassed / 60);
-  const liveMinute = Math.min(match.minuteNumber + extraMinutes, 90);
-
-  return `${liveMinute}'`;
-}
-
-function countryFlag(country: string) {
-  const c = country.toLowerCase();
-
-  if (c.includes("spain")) return "🇪🇸";
-  if (c.includes("england")) return "🏴";
-  if (c.includes("germany")) return "🇩🇪";
-  if (c.includes("france")) return "🇫🇷";
-  if (c.includes("italy")) return "🇮🇹";
-  if (c.includes("estonia")) return "🇪🇪";
-  if (c.includes("iran")) return "🇮🇷";
-  if (c.includes("latvia")) return "🇱🇻";
-  if (c.includes("lebanon")) return "🇱🇧";
-  if (c.includes("kuwait")) return "🇰🇼";
-  if (c.includes("georgia")) return "🇬🇪";
-  if (c.includes("tanzania")) return "🇹🇿";
-  if (c.includes("lithuania")) return "🇱🇹";
-  if (c.includes("cameroon")) return "🇨🇲";
-
-  return "🌍";
-}
-
-export default function LiveTvMobile() {
+export default function LiveTvDashboard() {
   const [matches, setMatches] = useState<Match[]>([]);
   const [selected, setSelected] = useState<Match | null>(null);
   const [fixtureStats, setFixtureStats] = useState<any[]>([]);
   const [fixtureEvents, setFixtureEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [tick, setTick] = useState(Date.now());
+  const [lastUpdate, setLastUpdate] = useState("--:--:--");
 
   useEffect(() => {
     const timer = setInterval(() => setTick(Date.now()), 30000);
     return () => clearInterval(timer);
   }, []);
 
-  useEffect(() => {
-    async function loadLive() {
-      try {
-        const res = await fetch("/api/live", { cache: "no-store" });
-        const data = await res.json();
+  async function loadLive() {
+    try {
+      const res = await fetch(`/api/live?t=${Date.now()}`, { cache: "no-store" });
+      const data = await res.json();
 
-        const liveGames = Array.isArray(data.response)
-          ? data.response.map(mapApiFixtureToMatch)
-          : [];
+      const liveGames = Array.isArray(data.response)
+        ? data.response.map(mapApiFixtureToMatch)
+        : [];
 
-        setMatches(liveGames);
+      setMatches(liveGames);
 
-        if (liveGames.length > 0) {
-          setSelected((current) => {
-            if (!current) return liveGames[0];
-            return liveGames.find((m: Match) => m.id === current.id) ?? liveGames[0];
-          });
-        } else {
-          setSelected(null);
-        }
-
-        setLoading(false);
-      } catch (error) {
-        console.error("loadLive", error);
-        setLoading(false);
+      if (liveGames.length > 0) {
+        setSelected((current) => {
+          if (!current) return liveGames[0];
+          return liveGames.find((m: Match) => m.id === current.id) ?? liveGames[0];
+        });
+      } else {
+        setSelected(null);
       }
-    }
 
+      setLastUpdate(new Date().toLocaleTimeString());
+      setLoading(false);
+    } catch (error) {
+      console.error("loadLive dashboard", error);
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
     loadLive();
     const interval = setInterval(loadLive, 30000);
     return () => clearInterval(interval);
@@ -140,20 +111,17 @@ export default function LiveTvMobile() {
   useEffect(() => {
     if (!selected) return;
 
-    const selectedId = selected.id;
-
     async function loadFixtureDetails() {
       try {
-        const res = await fetch(`/api/fixture?id=${selectedId}`, {
+        const res = await fetch(`/api/fixture?id=${selectedMatch.id}&t=${Date.now()}`, {
           cache: "no-store",
         });
 
         const data = await res.json();
-
         setFixtureStats(data.statistics ?? []);
         setFixtureEvents(data.events ?? []);
       } catch (error) {
-        console.error("Error cargando estadísticas/eventos:", error);
+        console.error("fixture dashboard", error);
       }
     }
 
@@ -162,67 +130,34 @@ export default function LiveTvMobile() {
     return () => clearInterval(interval);
   }, [selected?.id]);
 
-  const groupedMatches = useMemo(() => {
-    const groups: Record<string, Match[]> = {};
+  const selectedMatch = selected ?? matches[0] ?? null;
 
-    matches.forEach((match) => {
-      const key = `${match.country} · ${match.league}`;
-      if (!groups[key]) groups[key] = [];
-      groups[key].push(match);
-    });
-
-    Object.keys(groups).forEach((key) => {
-      groups[key].sort((a, b) => b.minuteNumber - a.minuteNumber);
-    });
-
-    return groups;
-  }, [matches]);
-
-  if (!selected) {
+  if (!selectedMatch) {
     return (
-      <main className="min-h-[100dvh] bg-[#03070b] text-white flex items-center justify-center px-5">
-        <div className="w-full max-w-md rounded-3xl bg-[#07111c] border border-white/10 p-8 text-center shadow-2xl">
-          <img
-            src="/logo-irvin.png"
-            alt="Irvin Analytics"
-            className="w-24 h-24 mx-auto rounded-2xl object-contain bg-black p-3 border border-cyan-400/30"
-          />
-
-          <h1 className="text-4xl font-black text-green-400 mt-6">
-            IRVIN ANALYTICS
-          </h1>
-
-          <p className="text-xl font-bold mt-4">
-            {loading
-              ? "Cargando partidos en vivo..."
-              : "No hay partidos en vivo ahora mismo"}
-          </p>
-
-          <p className="text-white/50 mt-3 leading-relaxed">
-            Sistema conectado correctamente. Cuando empiece un partido en directo,
-            aparecerán aquí las predicciones, eventos, momentum, alertas IA e Irvin Score.
-          </p>
+      <main className="min-h-[100dvh] bg-[#03070b] text-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-5xl font-black text-green-400">IRVIN ANALYTICS</div>
+          <div className="mt-4 text-white/50">
+            {loading ? "Cargando partidos..." : "No hay partidos en vivo"}
+          </div>
         </div>
       </main>
     );
   }
 
-  const homeShots = getStat(fixtureStats, selected.home, "Total Shots");
-  const awayShots = getStat(fixtureStats, selected.away, "Total Shots");
-  const homeShotsOn = getStat(fixtureStats, selected.home, "Shots on Goal");
-  const awayShotsOn = getStat(fixtureStats, selected.away, "Shots on Goal");
-  const homePossession = getStat(fixtureStats, selected.home, "Ball Possession") || "50%";
-  const awayPossession = getStat(fixtureStats, selected.away, "Ball Possession") || "50%";
-  const homeXg = getStat(fixtureStats, selected.home, "expected_goals");
-  const awayXg = getStat(fixtureStats, selected.away, "expected_goals");
-  const homeCorners = getStat(fixtureStats, selected.home, "Corner Kicks");
-  const awayCorners = getStat(fixtureStats, selected.away, "Corner Kicks");
-  const hasStats = fixtureStats.length > 0;
+  const homeShots = getStat(fixtureStats, selectedMatch.home, "Total Shots");
+  const awayShots = getStat(fixtureStats, selectedMatch.away, "Total Shots");
+  const homeShotsOn = getStat(fixtureStats, selectedMatch.home, "Shots on Goal");
+  const awayShotsOn = getStat(fixtureStats, selectedMatch.away, "Shots on Goal");
+  const homePossession = getStat(fixtureStats, selectedMatch.home, "Ball Possession") || "50%";
+  const awayPossession = getStat(fixtureStats, selectedMatch.away, "Ball Possession") || "50%";
+  const homeXg = getStat(fixtureStats, selectedMatch.home, "expected_goals");
+  const awayXg = getStat(fixtureStats, selectedMatch.away, "expected_goals");
 
-  const prediction = calculateLivePoisson({
-    homeScore: selected.homeScore,
-    awayScore: selected.awayScore,
-    minuteText: getLiveMinute(selected, tick),
+  const prediction: any = calculateLivePoisson({
+    homeScore: selectedMatch.homeScore,
+    awayScore: selectedMatch.awayScore,
+    minuteText: getLiveMinute(selectedMatch, tick),
     homeShots,
     awayShots,
     homeShotsOn,
@@ -231,347 +166,378 @@ export default function LiveTvMobile() {
     awayPossession,
   });
 
-  const homeMomentum =
-    toNumber(homeShots) * 1.2 +
-    toNumber(homeShotsOn) * 2.5 +
-    toNumber(homePossession) * 0.25 +
-    selected.homeScore * 8;
-
-  const awayMomentum =
-    toNumber(awayShots) * 1.2 +
-    toNumber(awayShotsOn) * 2.5 +
-    toNumber(awayPossession) * 0.25 +
-    selected.awayScore * 8;
-
-  const momentumTotal = Math.max(1, homeMomentum + awayMomentum);
-  const homeMomentumPercent = Math.round((homeMomentum / momentumTotal) * 100);
-  const awayMomentumPercent = 100 - homeMomentumPercent;
-
-  const momentumText =
-    homeMomentumPercent > awayMomentumPercent + 10
-      ? `${selected.home} domina`
-      : awayMomentumPercent > homeMomentumPercent + 10
-      ? `${selected.away} domina`
-      : "Partido equilibrado";
+  const bttsYes = prediction.bttsYes ?? prediction.btts ?? 0;
+  const bttsNo = prediction.bttsNo ?? 100 - bttsYes;
 
   const actionText =
-    prediction.irvinScore >= 85
-      ? "ENTRAR"
-      : prediction.irvinScore >= 65
-      ? "OBSERVAR"
-      : "NO ENTRAR";
+    prediction.irvinScore >= 85 ? "ENTRAR" :
+    prediction.irvinScore >= 65 ? "OBSERVAR" : "NO ENTRAR";
 
   const riskText =
-    prediction.confidence >= 80
-      ? "BAJO"
-      : prediction.confidence >= 60
-      ? "MEDIO"
-      : "ALTO";
+    prediction.confidence >= 80 ? "BAJO" :
+    prediction.confidence >= 60 ? "MEDIO" : "SIN VALOR";
 
-  const dataQuality = hasStats ? "ALTA" : fixtureEvents.length > 0 ? "MEDIA" : "BÁSICA";
-
-  const aiSummary = hasStats
-    ? "Modo completo: decisión basada en marcador, minuto, eventos y estadísticas avanzadas."
-    : "Modo Live Básico: esta liga no entrega estadísticas avanzadas. La decisión se basa en marcador, minuto, eventos y modelo Poisson.";
+  const hasStats = fixtureStats.length > 0;
 
   return (
-    <main className="min-h-[100dvh] bg-[#03070b] text-white px-4 pt-4 pb-24 space-y-4 overflow-y-auto">
-      <header className="rounded-3xl bg-[#07111c] border border-white/10 p-4 flex items-center gap-4 shadow-2xl">
-        <img
-          src="/logo-irvin.png"
-          alt="Irvin Analytics"
-          className="w-16 h-16 rounded-2xl object-contain bg-black p-2 border border-cyan-400/30 shadow-lg"
-        />
-
-        <div className="min-w-0">
-          <div className="text-2xl font-black text-green-400 leading-none truncate">
-            IRVIN ANALYTICS
-          </div>
-          <div className="text-white/50 text-sm mt-2">
-            Modo móvil · {matches.length} partidos en vivo
-          </div>
-        </div>
-      </header>
-
-      <section className="rounded-3xl bg-[#07111c] border border-white/10 p-5 text-center shadow-2xl">
-        <div className="text-white/50 font-black text-sm">
-          {countryFlag(selected.country)} {selected.country} · {selected.league}
-        </div>
-
-        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 mt-5">
-          <div className="text-center min-w-0">
-            <img src={selected.homeFlag} alt={selected.home} className="w-16 h-16 object-contain mx-auto" />
-            <div className="mt-3 font-black text-lg truncate">{selected.home}</div>
-          </div>
-
-          <div className="px-2 text-center">
-            <div className="inline-block rounded-2xl bg-green-500 px-4 py-2 text-sm font-black">
-              EN VIVO
-            </div>
-            <div className="text-6xl font-black mt-4 tracking-wide">
-              {selected.homeScore} - {selected.awayScore}
-            </div>
-            <div className="mt-3 text-green-400 font-black text-2xl">
-              {getLiveMinute(selected, tick)} · {selected.half}
-            </div>
-          </div>
-
-          <div className="text-center min-w-0">
-            <img src={selected.awayFlag} alt={selected.away} className="w-16 h-16 object-contain mx-auto" />
-            <div className="mt-3 font-black text-lg truncate">{selected.away}</div>
-          </div>
-        </div>
-      </section>
-
-      <section className="rounded-3xl bg-[#07111c] border border-white/10 p-4 shadow-2xl">
-        <div className="flex items-center justify-between mb-3">
-          <div className="font-black text-white/80">Cambiar partido</div>
-          <div className="text-green-400 font-black text-sm">{matches.length} LIVE</div>
-        </div>
-
-        <div className="flex gap-2 overflow-x-auto pb-1">
-          {matches.map((m) => (
-            <button
-              key={m.id}
-              onClick={() => setSelected(m)}
-              className={`min-w-[230px] rounded-2xl p-3 border text-left ${
-                selected.id === m.id
-                  ? "bg-green-500/15 border-green-400/50"
-                  : "bg-white/5 border-white/10"
-              }`}
-            >
-              <div className="flex justify-between items-center gap-2">
-                <span className="text-green-400 font-black">{getLiveMinute(m, tick)}</span>
-                <span className="font-black">{m.homeScore}-{m.awayScore}</span>
+    <main className="h-[100dvh] bg-[#03070b] text-white overflow-hidden p-3">
+      <div className="h-full grid grid-rows-[70px_1fr_34px] gap-3">
+        <header className="rounded-2xl bg-[#07111c] border border-white/10 px-5 py-3 grid grid-cols-[300px_1fr_260px] items-center shadow-[0_0_30px_rgba(0,255,120,.08)]">
+          <div className="flex items-center gap-5">
+            <div>
+             <div className="text-3xl font-black tracking-[0.28em]">IRVIN</div>
+              <div className="text-green-400 text-xs font-black tracking-[0.55em]">
+                ANALYTICS
               </div>
-              <div className="mt-2 text-sm font-bold truncate">{m.home}</div>
-              <div className="text-sm font-bold truncate text-white/60">{m.away}</div>
-            </button>
-          ))}
-        </div>
-      </section>
+            </div>
 
-
-
-
-
-<section className="grid grid-cols-3 gap-2">
-  <Box title="1" value={`${prediction.homeWin}%`} />
-  <Box title="X" value={`${prediction.draw}%`} />
-  <Box title="2" value={`${prediction.awayWin}%`} />
-</section>
-
-<section className="grid grid-cols-3 gap-2">
-  <Box title="+1.5" value={`${prediction.over15}%`} />
-  <Box title="+2.5" value={`${prediction.over25}%`} />
-  <Box title="+3.5" value={`${prediction.over35}%`} />
-</section>
-
-<section className="grid grid-cols-2 gap-2">
-  <Box title="BTTS Sí" value={`${prediction.bttsYes}%`} />
-  <Box title="BTTS No" value={`${prediction.bttsNo}%`} />
-</section>
-
-<section className="grid grid-cols-3 gap-2">
-  <Box title="Gol Local" value={`${prediction.nextGoalHome}%`} />
-  <Box title="Sin Gol" value={`${prediction.nextGoalDraw}%`} />
-  <Box title="Gol Visitante" value={`${prediction.nextGoalAway}%`} />
-</section>
-
-
-
-
-
-
-      <section className="rounded-3xl bg-[#07111c] border border-white/10 p-5 shadow-2xl">
-        <div className="text-center">
-          <div className="text-white/50 font-black">🤖 IRVIN AI</div>
-          <div className="mt-3 text-4xl font-black text-green-400">
-            {prediction.recommendation}
-          </div>
-          <div className="text-white/50 mt-2">Recomendación principal</div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3 mt-6">
-          <Box title="Acción" value={actionText} />
-          <Box title="Riesgo" value={riskText} />
-          <Box title="Confianza" value={`${prediction.confidence}%`} />
-          <Box title="Score" value={`${prediction.irvinScore}/100`} />
-        </div>
-
-        <div className="mt-5">
-          <div className="flex items-center justify-between mb-3">
-            <div className="font-black text-white/60">LECTURA DE LA IA</div>
-            <div className="text-xs rounded-full bg-white/5 border border-white/10 px-3 py-1 text-white/60">
-              DATOS {dataQuality}
+            <div>
+              <div className="text-2xl font-black tracking-tight">IRVIN ANALYTICS</div>
+<div className="text-xl font-black text-white/70">PRO TERMINAL</div>
             </div>
           </div>
 
-          <div className="space-y-2">
-            {(prediction.aiDecisions ?? []).slice(0, 4).map((item, i) => (
-              <div
-                key={i}
-                className="rounded-xl bg-white/5 border border-white/10 px-4 py-3 text-sm text-white/75 leading-relaxed"
-              >
-                {item}
-              </div>
-            ))}
+          <div className="flex items-center justify-center gap-8">
+            <Badge value="● EN VIVO" />
+            <Badge value={hasStats ? "MODO PRO" : "MODO BÁSICO"} yellow={!hasStats} />
+            <div className="text-center">
+              <div className="text-5xl font-black text-green-400">{matches.length}</div>
+              <div className="text-sm font-black text-white/70">PARTIDOS EN VIVO</div>
+            </div>
           </div>
 
-          <div className="mt-4 rounded-2xl bg-green-500/10 border border-green-500/30 p-4 text-sm text-white/70 leading-relaxed">
-            <span className="font-black text-white">Resumen:</span> {aiSummary}
+          <div className="text-right">
+            <div className="text-4xl font-black">{lastUpdate}</div>
+            <div className="text-white/50">Actualización automática</div>
           </div>
-        </div>
-      </section>
+        </header>
 
-      <section className="rounded-3xl bg-[#07111c] border border-white/10 p-5 shadow-2xl">
-        <div className="text-white/50 font-black text-center text-lg">EVENTOS</div>
+        <section className="grid grid-cols-[250px_1fr_310px] gap-3 min-h-0">
+          <aside className="rounded-2xl bg-[#07111c] border border-white/10 p-3 min-h-0 overflow-y-auto">
+            <div className="text-2xl font-black mb-4">PARTIDOS EN VIVO</div>
 
-        {fixtureEvents.length === 0 ? (
-          <div className="text-white/40 text-center mt-3">Sin eventos disponibles</div>
-        ) : (
-          <div className="mt-4 space-y-2">
-            {fixtureEvents.slice(-5).reverse().map((e: any, i: number) => (
-              <div key={i} className="bg-white/5 rounded-xl px-4 py-3 text-sm font-bold flex justify-between gap-2">
-                <span>{e.time?.elapsed}' {eventIcon(e.type)} {e.type}</span>
-                <span className="text-green-300 truncate">{e.player?.name ?? e.team?.name}</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
-
-      <section className="rounded-3xl bg-[#07111c] border border-white/10 p-5 shadow-2xl">
-        <div className="text-white/50 font-black text-center text-lg">MOMENTUM IA</div>
-        <div className="mt-4 text-center text-green-400 font-black text-2xl">
-          {momentumText}
-        </div>
-
-        <div className="mt-5 space-y-4">
-          <MomentumRow team={selected.home} value={homeMomentumPercent} color="bg-green-400" />
-          <MomentumRow team={selected.away} value={awayMomentumPercent} color="bg-blue-500" />
-        </div>
-      </section>
-
-      <section className="rounded-3xl bg-[#07111c] border border-white/10 p-5 shadow-2xl">
-        <div className="text-white/50 font-black text-center text-lg">ESTADÍSTICAS</div>
-
-        {!hasStats ? (
-          <div className="text-white/40 text-center mt-3">
-            Modo Live Básico: marcador + eventos + modelo Poisson
-          </div>
-        ) : (
-          <div className="mt-4 space-y-2">
-            <StatRow label="xG" home={homeXg} away={awayXg} />
-            <StatRow label="Tiros" home={homeShots} away={awayShots} />
-            <StatRow label="A puerta" home={homeShotsOn} away={awayShotsOn} />
-            <StatRow label="Corners" home={homeCorners} away={awayCorners} />
-            <StatRow label="Posesión" home={homePossession} away={awayPossession} />
-          </div>
-        )}
-      </section>
-
-      <section className="rounded-3xl bg-[#07111c] border border-white/10 p-4 shadow-2xl">
-        <div className="font-black mb-4 text-xl">Partidos en vivo</div>
-
-        <div className="space-y-5">
-          {Object.entries(groupedMatches).map(([groupName, games]) => {
-            const country = games[0]?.country ?? "World";
-            const leagueLogo = games[0]?.leagueLogo;
-
-            return (
-              <div key={groupName} className="rounded-2xl bg-black/30 border border-white/10 overflow-hidden">
-                <div className="px-4 py-3 bg-white/5 flex items-center justify-between">
-                  <div className="flex items-center gap-2 min-w-0">
-                    {leagueLogo && (
-                      <img src={leagueLogo} alt={groupName} className="w-6 h-6 object-contain" />
-                    )}
-                    <div className="font-black text-green-400 truncate">
-                      {countryFlag(country)} {groupName}
+            <div className="space-y-3">
+              {matches.map((m) => (
+                <button
+                  key={m.id}
+                  onClick={() => setSelected(m)}
+                  className={`w-full rounded-xl p-3 text-left border ${
+                    selectedMatch.id === m.id
+                      ? "bg-green-500/15 border-green-400/50"
+                      : "bg-white/5 border-white/5"
+                  }`}
+                >
+                  <div className="flex justify-between">
+                    <div className="text-green-400 font-black text-2xl">
+                      {getLiveMinute(m, tick)}
+                    </div>
+                    <div className="font-black text-xl">
+                      {m.homeScore}-{m.awayScore}
                     </div>
                   </div>
 
-                  <span className="text-xs text-white/40">{games.length}</span>
+                  <div className="mt-2 grid grid-cols-[22px_1fr] gap-2 items-center">
+                    {m.homeFlag ? <img src={m.homeFlag} className="w-5 h-5 object-contain" alt="" /> : <span />}
+                    <div className="font-bold truncate">{m.home}</div>
+                    {m.awayFlag ? <img src={m.awayFlag} className="w-5 h-5 object-contain" alt="" /> : <span />}
+                    <div className="font-bold truncate text-white/60">{m.away}</div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </aside>
+
+          <section className="rounded-2xl bg-[#07111c] border border-white/10 p-3 min-h-0 overflow-hidden">
+            <ScoreBoard
+              match={selectedMatch}
+              minute={getLiveMinute(selectedMatch, tick)}
+              prediction={prediction}
+            />
+
+            <div className="grid grid-cols-3 gap-2 mt-3">
+              <MetricCard title="GOLES ESPERADOS (xG)" value={homeXg || awayXg ? `${homeXg} - ${awayXg}` : "xG no disponible"} />
+              <MetricCard title="POSESIÓN" value={`${homePossession} / ${awayPossession}`} />
+              <MetricCard title="TIROS TOTALES" value={`${homeShots} - ${awayShots}`} />
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 mt-2">
+              <MarketCard title="PRÓXIMO GOL">
+                <div className="grid grid-cols-3 text-center items-end">
+                  <div>
+                    <div className="text-green-400 font-black truncate">{selectedMatch.home}</div>
+                    <div className="text-4xl font-black text-green-400">{prediction.nextGoalHome}%</div>
+                  </div>
+                  <div>
+                    <div className="text-white/50 font-black">SIN GOL</div>
+                    <div className="text-4xl font-black">{prediction.nextGoalDraw}%</div>
+                  </div>
+                  <div>
+                    <div className="text-blue-400 font-black truncate">{selectedMatch.away}</div>
+                    <div className="text-4xl font-black text-blue-400">{prediction.nextGoalAway}%</div>
+                  </div>
                 </div>
+              </MarketCard>
 
-                <div className="p-2 space-y-2">
-                  {games.map((m) => (
-                    <button
-                      key={m.id}
-                      onClick={() => setSelected(m)}
-                      className={`w-full rounded-xl p-3 grid grid-cols-[52px_1fr_64px] items-center gap-2 ${
-                        selected.id === m.id
-                          ? "bg-green-500/15 border border-green-400/40"
-                          : "bg-white/5 border border-white/5"
-                      }`}
-                    >
-                      <div className="text-left">
-                        <div className="text-green-400 font-black text-xl">
-                          {getLiveMinute(m, tick)}
-                        </div>
-                        <div className="text-[10px] text-white/40">{m.half}</div>
-                      </div>
+              <MarketCard title="LÍNEA DE GOLES">
+                <div className="grid grid-cols-3 text-center">
+                  <BigPercent label="+1.5" value={prediction.over15} />
+                  <BigPercent label="+2.5" value={prediction.over25} />
+                  <BigPercent label="+3.5" value={prediction.over35} />
+                </div>
+              </MarketCard>
 
-                      <div className="text-left min-w-0">
-                        <div className="font-bold truncate">{m.home}</div>
-                        <div className="text-white/40 text-xs">vs</div>
-                        <div className="font-bold truncate">{m.away}</div>
-                      </div>
+              <MarketCard title="1ª MITAD">
+                <div className="grid grid-cols-3 text-center">
+                  <BigPercent label={selectedMatch.home} value={prediction.firstHalfHome ?? 33} />
+                  <BigPercent label="EMPATE" value={prediction.firstHalfDraw ?? 34} />
+                  <BigPercent label={selectedMatch.away} value={prediction.firstHalfAway ?? 33} />
+                </div>
+              </MarketCard>
+            </div>
 
-                      <div className="text-right font-black text-xl">
-                        {m.homeScore}-{m.awayScore}
-                      </div>
-                    </button>
-                  ))}
+            <div className="grid grid-cols-3 gap-2 mt-2">
+              <MarketCard title="AMBOS ANOTAN (BTTS)">
+                <div className="grid grid-cols-2 text-center">
+                  <BigPercent label="SÍ" value={bttsYes} green />
+                  <BigPercent label="NO" value={bttsNo} red />
+                </div>
+              </MarketCard>
+
+              <MarketCard title="MOMENTUM">
+                <div className="text-center text-white/50">
+                  {hasStats ? "Lectura basada en tiros, posesión y marcador" : "Modo básico sin estadísticas avanzadas"}
+                </div>
+              </MarketCard>
+
+              <MarketCard title="CALIDAD DE DATOS">
+                <div className="text-center">
+                  <div className="text-4xl font-black text-green-400">
+                    {hasStats ? "ALTA" : "BÁSICA"}
+                  </div>
+                  <div className="text-white/40 mt-2">
+                    {hasStats ? "Stats + eventos + marcador" : "Marcador + eventos"}
+                  </div>
+                </div>
+              </MarketCard>
+            </div>
+          </section>
+
+          <aside className="grid grid-rows-[90px_1fr] gap-3 min-h-0">
+            <div className="rounded-2xl bg-[#07111c] border border-white/10 p-5">
+              <div className="text-2xl font-black">EVENTOS EN VIVO</div>
+              <div className="text-white/50 mt-3">
+                {fixtureEvents.length === 0 ? "Sin eventos disponibles todavía." : `${fixtureEvents.length} eventos detectados`}
+              </div>
+            </div>
+
+            <div className="rounded-2xl bg-[#07111c] border border-white/10 p-5 min-h-0 overflow-y-auto">
+              <div className="text-2xl font-black mb-4">IRVIN AI DECISIONES</div>
+
+              <div className="rounded-2xl bg-green-500/15 border border-green-500/30 p-4">
+                <div className="text-white/50 font-black text-sm">RECOMENDACIÓN PRINCIPAL</div>
+                <div className="text-4xl font-black text-green-400 mt-2">
+                  {prediction.recommendation}
+                </div>
+                <div className="text-white/60 mt-3">
+                  No es garantía de acierto. Úsalo como lectura estadística, no como apuesta segura.
                 </div>
               </div>
-            );
-          })}
-        </div>
-      </section>
+
+              <div className="grid grid-cols-2 gap-3 mt-4">
+                <DecisionBox title="ACCIÓN" value={actionText} />
+                <DecisionBox title="RIESGO" value={riskText} red={riskText === "SIN VALOR"} />
+                <DecisionBox title="CONFIANZA" value={`${prediction.confidence}%`} green />
+                <DecisionBox title="IRVIN SCORE" value={`${prediction.irvinScore}/100`} blue />
+              </div>
+
+              <div className="mt-4 text-white/50 font-black text-sm">LECTURA DE LA IA</div>
+              <div className="mt-2 space-y-2">
+                {(prediction.aiDecisions ?? []).slice(0, 5).map((item: string, i: number) => (
+                  <div key={i} className="rounded-xl bg-white/5 border border-white/10 px-3 py-2 text-sm">
+                    {item}
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-4 space-y-2">
+                {fixtureEvents.slice(-5).reverse().map((e: any, i: number) => (
+                  <div key={i} className="rounded-xl bg-white/5 border border-white/10 p-3 text-sm flex justify-between gap-2">
+                    <span>{e.time?.elapsed}' {eventIcon(e.type)} {e.type}</span>
+                    <span className="text-green-300 truncate">{e.player?.name ?? e.team?.name}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </aside>
+        </section>
+
+        <footer className="rounded-xl bg-[#07111c] border border-white/10 grid grid-cols-[1fr_1fr_1fr_180px] text-sm font-black overflow-hidden">
+          <div className="px-4 flex items-center text-yellow-300">
+            🔔 ALERTAS&nbsp;
+            <span className="text-white">
+              ID: {selectedMatch.id} | STATS: {fixtureStats.length} | EVENTS: {fixtureEvents.length}
+            </span>
+          </div>
+          <div className="px-4 flex items-center border-l border-white/10">
+            🔥 IA: {prediction.recommendation} · {actionText} · Confianza {prediction.confidence}%
+          </div>
+          <div className="px-4 flex items-center border-l border-white/10">
+            📊 {hasStats ? "Estadísticas avanzadas disponibles" : "Esta liga no ofrece estadísticas avanzadas"}
+          </div>
+          <div className="px-4 flex items-center justify-center border-l border-white/10 text-green-400">
+            DATOS CADA 5 MIN
+          </div>
+        </footer>
+      </div>
     </main>
   );
 }
 
-function Box({ title, value }: { title: string; value: string }) {
+function Badge({ value, yellow }: { value: string; yellow?: boolean }) {
   return (
-    <div className="rounded-2xl bg-[#07111c] border border-white/10 p-4 text-center shadow-lg">
-      <div className="text-white/50 text-sm truncate">{title}</div>
-      <div className="text-2xl font-black mt-1">{value}</div>
+    <div className={`rounded-full px-8 py-3 font-black border ${
+      yellow
+        ? "bg-yellow-400/10 border-yellow-400/20 text-yellow-300"
+        : "bg-green-500/15 border-green-500/30 text-green-400"
+    }`}>
+      {value}
     </div>
   );
 }
 
-function StatRow({ label, home, away }: { label: string; home: any; away: any }) {
-  return (
-    <div className="grid grid-cols-[70px_1fr_70px] items-center bg-white/5 rounded-xl px-4 py-3 text-sm">
-      <div className="font-black">{home}</div>
-      <div className="text-center text-white/50 font-bold">{label}</div>
-      <div className="font-black text-right">{away}</div>
-    </div>
-  );
-}
-
-function MomentumRow({
-  team,
-  value,
-  color,
+function ScoreBoard({
+  match,
+  minute,
+  prediction,
 }: {
-  team: string;
-  value: number;
-  color: string;
+  match: Match;
+  minute: string;
+  prediction: any;
+}) {
+  return (
+    <div className="rounded-2xl bg-[#07111c] border border-white/10 p-4">
+      <div className="text-center text-white/40 font-black text-sm">
+        {match.league}
+      </div>
+
+      <div className="grid grid-cols-[1fr_240px_1fr] items-center mt-2">
+        <TeamBlock side="LOCAL" logo={match.homeFlag} name={match.home} align="left" />
+
+        <div className="text-center">
+          <div className="text-green-400 text-xs font-black">EN VIVO</div>
+          <div className="text-6xl font-black mt-1">
+            {match.homeScore} - {match.awayScore}
+          </div>
+          <div className="text-white/50 mt-1">{minute} · {match.half}</div>
+        </div>
+
+        <TeamBlock side="VISITANTE" logo={match.awayFlag} name={match.away} align="right" />
+      </div>
+
+      <div
+        className="mt-4 h-6 rounded-lg overflow-hidden grid text-xs font-black text-center"
+        style={{
+          gridTemplateColumns: `${Math.max(prediction.homeWin, 1)}fr ${Math.max(prediction.draw, 1)}fr ${Math.max(prediction.awayWin, 1)}fr`,
+        }}
+      >
+        <div className="bg-green-500 text-black flex items-center justify-center">{prediction.homeWin}%</div>
+        <div className="bg-slate-500 flex items-center justify-center">{prediction.draw}%</div>
+        <div className="bg-blue-600 flex items-center justify-center">{prediction.awayWin}%</div>
+      </div>
+    </div>
+  );
+}
+
+function TeamBlock({
+  side,
+  logo,
+  name,
+  align,
+}: {
+  side: string;
+  logo: string;
+  name: string;
+  align: "left" | "right";
+}) {
+  return (
+    <div className={align === "right" ? "text-right" : "text-left"}>
+      <div className={`flex items-center gap-4 ${align === "right" ? "justify-end" : ""}`}>
+        {align === "left" && logo && <img src={logo} alt={name} className="w-10 h-10 object-contain" />}
+        <div>
+          <div className="text-white/40 text-xs font-black">{side}</div>
+          <div className="text-2xl font-black truncate max-w-[300px]">{name}</div>
+        </div>
+        {align === "right" && logo && <img src={logo} alt={name} className="w-10 h-10 object-contain" />}
+      </div>
+    </div>
+  );
+}
+
+function MetricCard({ title, value }: { title: string; value: any }) {
+  return (
+    <div className="h-36 rounded-xl bg-[#030b12] border border-white/10 p-4 flex flex-col items-center justify-center">
+      <div className="text-white/40 text-sm font-black mb-4">{title}</div>
+      <div className="text-4xl font-black">{value}</div>
+    </div>
+  );
+}
+
+function MarketCard({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="h-40 rounded-xl bg-[#030b12] border border-white/10 p-4 flex flex-col justify-center">
+      <div className="text-white/40 text-sm font-black text-center mb-4">{title}</div>
+      {children}
+    </div>
+  );
+}
+
+function BigPercent({
+  label,
+  value,
+  green,
+  red,
+}: {
+  label: string;
+  value: any;
+  green?: boolean;
+  red?: boolean;
 }) {
   return (
     <div>
-      <div className="flex justify-between text-sm text-white/60 mb-2">
-        <span className="truncate">{team}</span>
-        <span>{value}%</span>
+      <div className="text-white/50 text-sm font-black truncate">{label}</div>
+      <div className={`text-4xl font-black ${green ? "text-green-400" : red ? "text-red-400" : ""}`}>
+        {value}%
       </div>
-      <div className="h-4 bg-white/10 rounded-full overflow-hidden">
-        <div
-          className={`h-full ${color} transition-all duration-700`}
-          style={{ width: `${value}%` }}
-        />
+    </div>
+  );
+}
+
+function DecisionBox({
+  title,
+  value,
+  green,
+  red,
+  blue,
+}: {
+  title: string;
+  value: string;
+  green?: boolean;
+  red?: boolean;
+  blue?: boolean;
+}) {
+  return (
+    <div className="rounded-xl bg-white/5 border border-white/10 p-4 text-center">
+      <div className="text-white/40 text-xs font-black">{title}</div>
+      <div className={`text-2xl font-black mt-2 ${
+        green ? "text-green-400" : red ? "text-red-400" : blue ? "text-blue-400" : "text-yellow-300"
+      }`}>
+        {value}
       </div>
     </div>
   );

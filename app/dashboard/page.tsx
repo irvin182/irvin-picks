@@ -35,6 +35,17 @@ export default function DashboardPage() {
   const [fixtures, setFixtures] = useState<LiveFixture[]>([]);
   const [loadingLive, setLoadingLive] = useState(true);
 
+  const [livePath, setLivePath] = useState("/live-tv");
+
+useEffect(() => {
+  const ua = navigator.userAgent.toLowerCase();
+  const isMobile =
+    /iphone|android.*mobile|windows phone|ipod/.test(ua) ||
+    (window.innerWidth < 768 && navigator.maxTouchPoints > 0);
+
+  setLivePath(isMobile ? "/live" : "/live-tv");
+}, []);
+
   useEffect(() => {
     let mounted = true;
 
@@ -160,7 +171,7 @@ export default function DashboardPage() {
                 </a>
 
                 <a
-                 href="/live"
+                href={livePath}
                   className="rounded-xl border border-green-400/40 text-green-300 font-black text-center py-3 hover:bg-green-400 hover:text-black transition"
                 >
                   VER IA LIVE
@@ -170,11 +181,12 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <LiveMatchesBlock
-          fixtures={topFixtures}
-          loading={loadingLive}
-          total={fixtures.length}
-        />
+<LiveMatchesBlock
+  fixtures={topFixtures}
+  loading={loadingLive}
+  total={fixtures.length}
+  livePath={livePath}
+/>
 
         <div className="relative grid lg:grid-cols-3 gap-6 mt-8">
           <div className="rounded-[2rem] border border-green-500/30 bg-gradient-to-br from-green-500/20 via-[#07111c] to-black p-8 shadow-[0_0_45px_rgba(0,255,120,.16)]">
@@ -265,16 +277,23 @@ export default function DashboardPage() {
     </main>
   );
 }
-
 function LiveMatchesBlock({
   fixtures,
   loading,
   total,
+  livePath,
 }: {
   fixtures: LiveFixture[];
   loading: boolean;
   total: number;
+  livePath: string;
 }) {
+
+
+
+
+
+
   return (
     <div className="relative rounded-[2rem] border border-green-500/25 bg-[#07111c]/90 p-6 shadow-[0_0_35px_rgba(0,255,120,.10)]">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
@@ -295,7 +314,7 @@ function LiveMatchesBlock({
         </div>
 
         <a
-          href="/live"
+        href={livePath}
           className="rounded-2xl bg-green-500 text-black px-6 py-3 font-black hover:bg-green-400 transition text-center"
         >
           ABRIR LIVE TV
@@ -333,7 +352,7 @@ function LiveMatchesBlock({
             return (
               <a
                 key={id ?? `${home}-${away}`}
-                href={id ? `/live?fixture=${id}` : "/live"}
+                href={id ? `${livePath}?fixture=${id}` : livePath}
                 className="rounded-2xl border border-white/10 bg-black/30 p-5 hover:border-green-400/50 hover:bg-green-500/10 transition"
               >
                 <div className="flex items-center justify-between gap-3">
