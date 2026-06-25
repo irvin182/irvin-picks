@@ -2,7 +2,6 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { calculateLivePoisson } from "@/lib/livePoisson";
-import { calculateMomentum } from "@/lib/momentum";
 import LiveHeader from "@/components/ui/live/LiveHeader";
 import MatchSelector from "@/components/ui/live/MatchSelector";
 import ScoreBoard from "@/components/ui/live/ScoreBoard";
@@ -25,13 +24,6 @@ function getStat(stats: any[], teamName: string, statName: string) {
   const team = stats.find((s) => s.team?.name === teamName);
   const stat = team?.statistics?.find((x: any) => x.type === statName);
   return stat?.value ?? 0;
-}
-
-function eventIcon(type: string) {
-  if (type === "Goal") return "⚽";
-  if (type === "Card") return "🟨";
-  if (type === "subst") return "🔁";
-  return "•";
 }
 
 function actionLabel(score: number) {
@@ -60,16 +52,9 @@ export default function LiveTvDashboard() {
     async function loadLive() {
       try {
         const res = await fetch("/api/live", { cache: "no-store" });
-
-        if (!res.ok) {
-          throw new Error(`Error /api/live: ${res.status}`);
-        }
+        if (!res.ok) throw new Error(`Error /api/live: ${res.status}`);
 
         const data = await res.json();
-
-        if (data?.errors && Object.keys(data.errors).length > 0) {
-          console.warn("API-Football error:", data.errors);
-        }
 
         const realMatches: Match[] = Array.isArray(data.response)
           ? data.response.map((item: any) => ({
@@ -111,7 +96,9 @@ export default function LiveTvDashboard() {
 
     async function loadFixtureDetails() {
       try {
-        const res = await fetch(`/api/fixture?id=${selectedId}`, { cache: "no-store" });
+        const res = await fetch(`/api/fixture?id=${selectedId}`, {
+          cache: "no-store",
+        });
         const data = await res.json();
 
         setFixtureStats(data.statistics ?? []);
@@ -135,18 +122,10 @@ export default function LiveTvDashboard() {
   const awayShots = selected ? getStat(fixtureStats, selected.away, "Total Shots") : 0;
   const homeShotsOn = selected ? getStat(fixtureStats, selected.home, "Shots on Goal") : 0;
   const awayShotsOn = selected ? getStat(fixtureStats, selected.away, "Shots on Goal") : 0;
-  const homeCorners = selected ? getStat(fixtureStats, selected.home, "Corner Kicks") : 0;
-  const awayCorners = selected ? getStat(fixtureStats, selected.away, "Corner Kicks") : 0;
-  const homeFouls = selected ? getStat(fixtureStats, selected.home, "Fouls") : 0;
-  const awayFouls = selected ? getStat(fixtureStats, selected.away, "Fouls") : 0;
   const homePossession = selected ? getStat(fixtureStats, selected.home, "Ball Possession") : "0%";
   const awayPossession = selected ? getStat(fixtureStats, selected.away, "Ball Possession") : "0%";
   const homeXg = selected ? getStat(fixtureStats, selected.home, "expected_goals") : 0;
   const awayXg = selected ? getStat(fixtureStats, selected.away, "expected_goals") : 0;
-  const homeYellowCards = selected ? getStat(fixtureStats, selected.home, "Yellow Cards") : 0;
-  const awayYellowCards = selected ? getStat(fixtureStats, selected.away, "Yellow Cards") : 0;
-  const homePassAccuracy = selected ? getStat(fixtureStats, selected.home, "Passes %") : "0%";
-  const awayPassAccuracy = selected ? getStat(fixtureStats, selected.away, "Passes %") : "0%";
 
   const hasStats = fixtureStats.length > 0;
   const dataMode = hasStats ? "MODO COMPLETO" : "MODO BÁSICO";
@@ -173,17 +152,6 @@ export default function LiveTvDashboard() {
   const bestAction = actionLabel(prediction?.irvinScore ?? 0);
   const risk = riskLabel(prediction?.irvinScore ?? 0);
 
-  const momentum = calculateMomentum({
-    homeShots,
-    awayShots,
-    homeShotsOn,
-    awayShotsOn,
-    homeCorners,
-    awayCorners,
-    homePossession,
-    awayPossession,
-  });
-
   if (loading) {
     return (
       <main className="min-h-screen bg-[#03070b] text-white flex items-center justify-center text-center">
@@ -209,28 +177,25 @@ export default function LiveTvDashboard() {
 
   if (!selected) return null;
 
-return (
-  <main className="h-screen bg-[#03070b] text-white overflow-hidden">
-    <div className="h-screen p-1 grid grid-rows-[46px_1fr_40px] gap-1 text-[85%]">
+  return (
+    <main className="h-screen bg-[#03070b] text-white overflow-hidden">
+      <div className="h-screen p-1 grid grid-rows-[46px_1fr_40px] gap-1 text-[85%]">
+        <LiveHeader
+          matchesCount={matches.length}
+          lastUpdate={lastUpdate}
+          dataMode={dataMode}
+          dataModeColor={dataModeColor}
+        />
 
+        <section className="grid grid-cols-[240px_minmax(0,1fr)_280px] gap-2 min-h-0">
+          <MatchSelector
+            matches={matches}
+            selectedId={selected?.id ?? null}
+            onSelect={setSelectedId}
+          />
 
-
-
-<LiveHeader
-  matchesCount={matches.length}
-  lastUpdate={lastUpdate}
-  dataMode={dataMode}
-  dataModeColor={dataModeColor}
-/>
-
-        <section className="grid grid-cols-[240px_minmax(0,1fr)_280px] gap-1 min-h-0">
-
-        <MatchSelector
-  matches={matches}
-  selectedId={selected?.id ?? null}
-  onSelect={setSelectedId}
-/><section className="overflow-hidden grid grid-rows-[205px_minmax(0,1fr)] min-h-0 gap-2">
-<ScoreBoard selected={selected} prediction={prediction} />
+          <section className="rounded-2xl border border-white/10 bg-[#07111c]/90 overflow-hidden grid grid-rows-[320px_minmax(0,1fr)] min-h-0">
+            <ScoreBoard selected={selected} prediction={prediction} />
 
             <div className="p-3 grid grid-cols-3 gap-3 overflow-y-auto min-h-0">
               <Card title="GOLES ESPERADOS (xG)">
@@ -262,7 +227,15 @@ return (
                 <div className="h-3 bg-white/10 rounded-full mt-6 overflow-hidden">
                   <div
                     className="h-full bg-green-500"
-                    style={{ width: `${Math.min(100, Math.max(8, (homeShots / Math.max(1, homeShots + awayShots)) * 100))}%` }}
+                    style={{
+                      width: `${Math.min(
+                        100,
+                        Math.max(
+                          8,
+                          (homeShots / Math.max(1, homeShots + awayShots)) * 100
+                        )
+                      )}%`,
+                    }}
                   />
                 </div>
               </Card>
@@ -271,15 +244,21 @@ return (
                 <div className="grid grid-cols-3 text-center mt-8">
                   <div>
                     <div className="text-green-400 font-bold truncate">{selected.home}</div>
-                    <div className="text-3xl font-black text-green-400">{prediction?.nextGoalHome ?? 0}%</div>
+                    <div className="text-3xl font-black text-green-400">
+                      {prediction?.nextGoalHome ?? 0}%
+                    </div>
                   </div>
                   <div>
                     <div className="text-white/60 font-bold">SIN GOL</div>
-                    <div className="text-3xl font-black">{prediction?.nextGoalDraw ?? 0}%</div>
+                    <div className="text-3xl font-black">
+                      {prediction?.nextGoalDraw ?? 0}%
+                    </div>
                   </div>
                   <div>
                     <div className="text-blue-400 font-bold truncate">{selected.away}</div>
-                    <div className="text-3xl font-black text-blue-400">{prediction?.nextGoalAway ?? 0}%</div>
+                    <div className="text-3xl font-black text-blue-400">
+                      {prediction?.nextGoalAway ?? 0}%
+                    </div>
                   </div>
                 </div>
               </Card>
@@ -295,57 +274,65 @@ return (
               <Card title="1ª MITAD">
                 <div className="grid grid-cols-3 mt-5 text-center">
                   <div>
-                    <div className="text-green-400 text-xs font-bold truncate">{selected.home}</div>
-                    <div className="text-2xl font-black">{prediction?.firstHalfHomeWin ?? 0}%</div>
+                    <div className="text-green-400 text-xs font-bold truncate">
+                      {selected.home}
+                    </div>
+                    <div className="text-2xl font-black">
+                      {prediction?.firstHalfHomeWin ?? 0}%
+                    </div>
                   </div>
                   <div>
                     <div className="text-white/60 text-xs font-bold">EMPATE</div>
-                    <div className="text-2xl font-black">{prediction?.firstHalfDraw ?? 0}%</div>
+                    <div className="text-2xl font-black">
+                      {prediction?.firstHalfDraw ?? 0}%
+                    </div>
                   </div>
                   <div>
-                    <div className="text-blue-400 text-xs font-bold truncate">{selected.away}</div>
-                    <div className="text-2xl font-black">{prediction?.firstHalfAwayWin ?? 0}%</div>
+                    <div className="text-blue-400 text-xs font-bold truncate">
+                      {selected.away}
+                    </div>
+                    <div className="text-2xl font-black">
+                      {prediction?.firstHalfAwayWin ?? 0}%
+                    </div>
                   </div>
                 </div>
                 <div className="mt-4 text-center text-white/60 text-xs font-bold">
-                  xG 1ª mitad: {prediction?.firstHalfXgHome ?? 0} - {prediction?.firstHalfXgAway ?? 0}
+                  xG 1ª mitad: {prediction?.firstHalfXgHome ?? 0} -{" "}
+                  {prediction?.firstHalfXgAway ?? 0}
                 </div>
               </Card>
 
-<Card title="AMBOS ANOTAN (BTTS)">
-  <div className="grid grid-cols-2 mt-8 text-center">
-    <div>
-      <div className="text-white/60">SÍ</div>
-      <div className="text-3xl font-black text-green-400">
-        {(prediction as any)?.bttsYes ?? (prediction as any)?.btts ?? 0}%
-      </div>
-    </div>
+              <Card title="AMBOS ANOTAN (BTTS)">
+                <div className="grid grid-cols-2 mt-8 text-center">
+                  <div>
+                    <div className="text-white/60">SÍ</div>
+                    <div className="text-3xl font-black text-green-400">
+                      {(prediction as any)?.bttsYes ?? (prediction as any)?.btts ?? 0}%
+                    </div>
+                  </div>
 
-    <div>
-      <div className="text-white/60">NO</div>
-      <div className="text-3xl font-black text-red-400">
-        {(prediction as any)?.bttsNo ??
-          100 - ((prediction as any)?.btts ?? 0)}
-        %
-      </div>
-    </div>
-  </div>
-</Card>
+                  <div>
+                    <div className="text-white/60">NO</div>
+                    <div className="text-3xl font-black text-red-400">
+                      {(prediction as any)?.bttsNo ??
+                        100 - ((prediction as any)?.btts ?? 0)}
+                      %
+                    </div>
+                  </div>
+                </div>
+              </Card>
             </div>
           </section>
 
-
-     <IrvinAIPanel
-  fixtureEvents={fixtureEvents}
-  selected={selected}
-  prediction={prediction}
-  bestAction={bestAction}
-  risk={risk}
-  aiDecisions={aiDecisions}
-  hasStats={hasStats}
-/>
-
-
+          <IrvinAIPanel
+            fixtureEvents={fixtureEvents}
+            selected={selected}
+            prediction={prediction}
+            bestAction={bestAction}
+            risk={risk}
+            aiDecisions={aiDecisions}
+            hasStats={hasStats}
+          />
         </section>
 
         <footer className="rounded-2xl border border-white/10 bg-[#07111c]/90 grid grid-cols-[120px_1fr_1fr_1fr_180px] items-center overflow-hidden">
@@ -369,22 +356,23 @@ return (
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="rounded-md border border-white/10 bg-[#030b13] p-1.5 overflow-hidden min-h-[105px]">
-      <h3 className="text-center text-white/50 font-bold text-[11px] leading-tight">{title}</h3>
+      <h3 className="text-center text-white/50 font-bold text-[11px] leading-tight">
+        {title}
+      </h3>
       {children}
     </div>
   );
 }
 
-function Panel({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="rounded-2xl border border-white/10 bg-[#07111c]/90 p-4 overflow-hidden">
-      <h3 className="font-black text-lg mb-3">{title}</h3>
-      {children}
-    </div>
-  );
-}
-
-function BigLine({ value, label, color }: { value: string; label: string; color: "green" | "blue" }) {
+function BigLine({
+  value,
+  label,
+  color,
+}: {
+  value: string;
+  label: string;
+  color: "green" | "blue";
+}) {
   return (
     <div className="mt-5">
       <div className="flex justify-between items-end gap-2">
@@ -392,17 +380,12 @@ function BigLine({ value, label, color }: { value: string; label: string; color:
         <span className="text-white/50 text-sm truncate">{label}</span>
       </div>
       <div className="h-3 bg-white/10 rounded-full mt-2 overflow-hidden">
-        <div className={`h-full ${color === "green" ? "bg-green-500 w-[75%]" : "bg-blue-600 w-[45%]"}`} />
+        <div
+          className={`h-full ${
+            color === "green" ? "bg-green-500 w-[75%]" : "bg-blue-600 w-[45%]"
+          }`}
+        />
       </div>
-    </div>
-  );
-}
-
-function MiniBox({ label, value, color }: { label: string; value: string; color: string }) {
-  return (
-    <div className="rounded-xl bg-white/5 p-3 border border-white/10">
-      <div className="text-white/40 text-[11px] font-bold">{label}</div>
-      <div className={`text-lg font-black mt-1 ${color}`}>{value}</div>
     </div>
   );
 }
@@ -412,20 +395,6 @@ function Market({ label, value }: { label: string; value: number }) {
     <div>
       <div className="text-white/60">{label}</div>
       <div className="text-3xl font-black">{value}%</div>
-    </div>
-  );
-}
-
-function Progress({ label, value, color }: { label: string; value: number; color: "green" | "blue" }) {
-  return (
-    <div>
-      <div className="flex justify-between text-xs text-white/60 mb-1">
-        <span>{label}</span>
-        <span>{value}%</span>
-      </div>
-      <div className="h-3 bg-white/10 rounded-full overflow-hidden">
-        <div className={`h-full ${color === "green" ? "bg-green-500" : "bg-blue-600"}`} style={{ width: `${value}%` }} />
-      </div>
     </div>
   );
 }
