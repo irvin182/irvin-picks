@@ -7,6 +7,7 @@ import LiveHeader from "@/components/ui/live/LiveHeader";
 import MatchSelector from "@/components/ui/live/MatchSelector";
 import ScoreBoard from "@/components/ui/live/ScoreBoard";
 import IrvinAIPanel from "@/components/ui/live/IrvinAIPanel";
+
 type Match = {
   id: number;
   minute: string;
