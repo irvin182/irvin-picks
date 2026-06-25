@@ -179,7 +179,7 @@ export default function LiveTvDashboard() {
 
   return (
     <main className="h-screen bg-[#03070b] text-white overflow-hidden">
-      <div className="h-screen p-2 grid grid-rows-[64px_minmax(0,1fr)_38px] gap-2 text-[85%]">
+      <div className="h-screen p-2 grid grid-rows-[58px_minmax(0,1fr)_34px] gap-2 text-[80%]">
         <LiveHeader
           matchesCount={matches.length}
           lastUpdate={lastUpdate}
@@ -187,14 +187,14 @@ export default function LiveTvDashboard() {
           dataModeColor={dataModeColor}
         />
 
-        <section className="grid grid-cols-[220px_minmax(0,1fr)_300px] gap-2 min-h-0">
+        <section className="grid grid-cols-[210px_minmax(0,1fr)_290px] gap-2 min-h-0">
           <MatchSelector
             matches={matches}
             selectedId={selected?.id ?? null}
             onSelect={setSelectedId}
           />
 
-          <section className="rounded-2xl border border-white/10 bg-[#07111c]/90 overflow-hidden grid grid-rows-[145px_minmax(0,1fr)] min-h-0">
+          <section className="rounded-2xl border border-white/10 bg-[#07111c]/90 overflow-hidden grid grid-rows-[130px_minmax(0,1fr)] min-h-0">
             <ScoreBoard selected={selected} prediction={prediction} />
 
             <div className="p-2 grid grid-cols-3 gap-2 overflow-y-auto min-h-0">
@@ -352,7 +352,7 @@ export default function LiveTvDashboard() {
 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-md border border-white/10 bg-[#030b13] p-1.5 overflow-hidden min-h-[90px]">
+    <div className="rounded-md border border-white/10 bg-[#030b13] p-1.5 overflow-hidden min-h-[86px]">
       <h3 className="text-center text-white/50 font-bold text-[11px] leading-tight">
         {title}
       </h3>
