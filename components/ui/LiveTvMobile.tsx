@@ -293,7 +293,7 @@ export default function LiveTvMobile() {
         </div>
       </header>
 
-      <section className="rounded-3xl bg-[#07111c] border border-white/10 p-5 text-center shadow-2xl">
+      <section className="rounded-3xl border border-white/10 p-5 text-center shadow-2xl bg-[radial-gradient(circle_at_center,#10243a_0%,#07111c_55%,#03070b_100%)]">
         <div className="text-white/50 font-black text-sm">
           {countryFlag(selected.country)} {selected.country} · {selected.league}
         </div>
@@ -305,7 +305,7 @@ export default function LiveTvMobile() {
           </div>
 
           <div className="px-2 text-center">
-            <div className="inline-block rounded-2xl bg-green-500 px-4 py-2 text-sm font-black">
+            <div className="inline-block rounded-2xl bg-green-500 px-4 py-2 text-sm font-black text-black">
               EN VIVO
             </div>
             <div className="text-6xl font-black mt-4 tracking-wide">
@@ -319,6 +319,26 @@ export default function LiveTvMobile() {
           <div className="text-center min-w-0">
             <img src={selected.awayFlag} alt={selected.away} className="w-16 h-16 object-contain mx-auto" />
             <div className="mt-3 font-black text-lg truncate">{selected.away}</div>
+          </div>
+        </div>
+
+        <div
+          className="mt-5 h-7 rounded-xl overflow-hidden grid text-[11px] font-black text-center"
+          style={{
+            gridTemplateColumns: `${Math.max(prediction.homeWin, 1)}fr ${Math.max(
+              prediction.draw,
+              1
+            )}fr ${Math.max(prediction.awayWin, 1)}fr`,
+          }}
+        >
+          <div className="bg-green-500 text-black flex items-center justify-center">
+            {prediction.homeWin}%
+          </div>
+          <div className="bg-slate-500 flex items-center justify-center">
+            {prediction.draw}%
+          </div>
+          <div className="bg-blue-600 flex items-center justify-center">
+            {prediction.awayWin}%
           </div>
         </div>
       </section>
@@ -351,37 +371,28 @@ export default function LiveTvMobile() {
         </div>
       </section>
 
+      <section className="grid grid-cols-3 gap-2">
+        <Box title="1" value={`${prediction.homeWin}%`} />
+        <Box title="X" value={`${prediction.draw}%`} />
+        <Box title="2" value={`${prediction.awayWin}%`} />
+      </section>
 
+      <section className="grid grid-cols-3 gap-2">
+        <Box title="+1.5" value={`${prediction.over15}%`} />
+        <Box title="+2.5" value={`${prediction.over25}%`} />
+        <Box title="+3.5" value={`${prediction.over35}%`} />
+      </section>
 
+      <section className="grid grid-cols-2 gap-2">
+        <Box title="BTTS Sí" value={`${(prediction as any).bttsYes ?? (prediction as any).btts ?? 0}%`} />
+        <Box title="BTTS No" value={`${(prediction as any).bttsNo ?? 100 - ((prediction as any).btts ?? 0)}%`} />
+      </section>
 
-
-<section className="grid grid-cols-3 gap-2">
-  <Box title="1" value={`${prediction.homeWin}%`} />
-  <Box title="X" value={`${prediction.draw}%`} />
-  <Box title="2" value={`${prediction.awayWin}%`} />
-</section>
-
-<section className="grid grid-cols-3 gap-2">
-  <Box title="+1.5" value={`${prediction.over15}%`} />
-  <Box title="+2.5" value={`${prediction.over25}%`} />
-  <Box title="+3.5" value={`${prediction.over35}%`} />
-</section>
-
-<section className="grid grid-cols-2 gap-2">
-  <Box title="BTTS Sí" value={`${prediction.bttsYes}%`} />
-  <Box title="BTTS No" value={`${prediction.bttsNo}%`} />
-</section>
-
-<section className="grid grid-cols-3 gap-2">
-  <Box title="Gol Local" value={`${prediction.nextGoalHome}%`} />
-  <Box title="Sin Gol" value={`${prediction.nextGoalDraw}%`} />
-  <Box title="Gol Visitante" value={`${prediction.nextGoalAway}%`} />
-</section>
-
-
-
-
-
+      <section className="grid grid-cols-3 gap-2">
+        <Box title="Gol Local" value={`${prediction.nextGoalHome}%`} />
+        <Box title="Sin Gol" value={`${prediction.nextGoalDraw}%`} />
+        <Box title="Gol Visitante" value={`${prediction.nextGoalAway}%`} />
+      </section>
 
       <section className="rounded-3xl bg-[#07111c] border border-white/10 p-5 shadow-2xl">
         <div className="text-center">
