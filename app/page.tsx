@@ -8,61 +8,93 @@ export default function HomePage() {
       <section className="max-w-7xl mx-auto px-6 py-20">
         <div className="text-center">
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-green-500/10 border border-green-500/30 text-green-400 font-bold mb-8">
-            ● IA EN TIEMPO REAL
+            ● IA DEPORTIVA EN TIEMPO REAL
           </div>
 
-          <h1 className="text-6xl font-black tracking-tight">
+          <h1 className="text-5xl md:text-7xl font-black tracking-tight">
             IRVIN <span className="text-green-400">ANALYTICS</span>
           </h1>
 
-          <p className="mt-8 text-2xl text-white/70 max-w-4xl mx-auto leading-relaxed">
-            Plataforma profesional de inteligencia artificial para fútbol.
-            Predicciones en vivo, modelos Poisson, BTTS, Próximo Gol,
-            Over/Under y análisis estadístico en tiempo real.
+          <p className="mt-8 text-xl md:text-2xl text-white/70 max-w-4xl mx-auto leading-relaxed">
+            Plataforma privada de análisis deportivo con inteligencia artificial.
+            Analiza partidos en vivo, detecta momentum, calcula probabilidades y
+            genera informes premium para tomar mejores decisiones.
           </p>
 
           <div className="flex justify-center gap-5 mt-12 flex-wrap">
             <Link
-              href="/login"
+              href="/demo"
               className="px-8 py-4 rounded-2xl bg-green-500 text-black font-black text-lg hover:scale-105 transition"
+            >
+              VER DEMO EN VIVO
+            </Link>
+
+            <Link
+              href="/login"
+              className="px-8 py-4 rounded-2xl border border-white/20 bg-white/5 hover:bg-white/10 transition font-bold"
             >
               ENTRAR AL SISTEMA
             </Link>
-
-        <Link
-  href="/demo"
-  className="px-8 py-4 rounded-2xl border border-white/20 bg-white/5 hover:bg-white/10 transition"
->
-  VER DEMO EN VIVO
-</Link>
           </div>
+
+          <p className="mt-6 text-sm text-white/40">
+            No garantizamos ganancias. Irvin Analytics es una herramienta de análisis estadístico e informativo.
+          </p>
         </div>
       </section>
 
       <section className="max-w-7xl mx-auto px-6 pb-20">
-        <h2 className="text-4xl font-black text-center mb-14">
-          ¿Qué incluye?
+        <h2 className="text-4xl font-black text-center mb-6">
+          ¿Qué puedes analizar?
         </h2>
 
+        <p className="text-center text-white/60 max-w-3xl mx-auto mb-14 text-lg">
+          Toda la información importante del partido en una sola pantalla:
+          estadísticas, IA, probabilidades, momentum y señales en vivo.
+        </p>
+
         <div className="grid md:grid-cols-3 gap-8">
-          <Card title="📺 TV EN VIVO" text="Visualización profesional de partidos con IA, estadísticas, eventos y probabilidades." />
-          <Card title="⚽ INFORMES PREMIUM" text="Informes diarios generados automáticamente con análisis estadístico avanzado." />
-          <Card title="🧠 IA PREDICTIVA" text="Poisson, Momentum, Próximo Gol, BTTS, Over/Under y recomendaciones inteligentes." />
-          <Card title="📈 MERCADOS" text="Victoria, Empate, BTTS, Próximo Gol, Línea de Goles y más mercados en desarrollo." />
-          <Card title="⚡ ACTUALIZACIÓN EN VIVO" text="Datos sincronizados constantemente durante el partido." />
-          <Card title="🔒 ACCESO PRIVADO" text="Sistema protegido con autenticación y gestión de licencias." />
+          <Card title="📺 TV EN VIVO" text="Pantalla profesional para seguir partidos en directo con datos, eventos y probabilidades." />
+          <Card title="🧠 IA PREDICTIVA" text="Modelo Poisson, Próximo Gol, BTTS, Over/Under, marcador probable y análisis inteligente." />
+          <Card title="📊 MATCH MOMENTUM" text="Lectura del dominio del partido para detectar qué equipo está generando más peligro." />
+          <Card title="⚽ INFORMES PREMIUM" text="Informes diarios con partidos destacados, probabilidades y análisis estadístico." />
+          <Card title="⚡ DATOS EN TIEMPO REAL" text="Actualización constante de estadísticas, goles, tiros, corners, tarjetas y eventos." />
+          <Card title="🔒 ACCESO PRIVADO" text="Sistema protegido con usuarios, planes, licencias y control de acceso." />
         </div>
       </section>
 
-      <section className="relative z-50 bg-[#07111c] border-t border-white/10">
+      <section className="bg-[#07111c] border-y border-white/10">
+        <div className="max-w-7xl mx-auto px-6 py-20 text-center">
+          <h2 className="text-4xl font-black mb-6">
+            Diseñado para gente que quiere analizar mejor
+          </h2>
+
+          <p className="text-white/60 max-w-4xl mx-auto text-lg leading-8">
+            Irvin Analytics no es una promesa de dinero fácil. Es una herramienta
+            para ver el fútbol con datos reales, modelos matemáticos e inteligencia
+            artificial, ayudándote a tomar decisiones con más información y menos intuición.
+          </p>
+        </div>
+      </section>
+
+      <section className="relative z-50 bg-[#03070b]">
         <div className="max-w-7xl mx-auto px-6 py-20">
-          <h2 className="text-4xl font-black text-center mb-14">Planes</h2>
+          <h2 className="text-4xl font-black text-center mb-4">Planes</h2>
+
+          <p className="text-center text-white/60 mb-14">
+            Elige tu acceso mensual y empieza a usar Irvin Analytics.
+          </p>
 
           <div className="grid md:grid-cols-3 gap-8">
-            <Price plan="BETA" price="9,90€" desc="Acceso básico" />
-            <Price plan="PREMIUM" price="19,90€" desc="TV + Informes + IA" featured />
-            <Price plan="VIP" price="39,90€" desc="Todo desbloqueado" />
+            <Price plan="BETA" price="9,90€" desc="Acceso básico para probar la plataforma." />
+            <Price plan="PREMIUM" price="19,90€" desc="TV en vivo, informes e IA avanzada." featured />
+            <Price plan="VIP" price="39,90€" desc="Acceso completo a todas las funciones premium." />
           </div>
+
+          <p className="mt-10 text-center text-xs text-white/35 max-w-4xl mx-auto leading-6">
+            Aviso responsable: Irvin Analytics ofrece análisis estadístico y deportivo.
+            Las predicciones no son garantías de resultado. El uso de la información es responsabilidad del usuario.
+          </p>
         </div>
       </section>
     </main>
@@ -103,8 +135,6 @@ function Price({
           : "border-white/10 bg-gradient-to-br from-[#07111c] to-black"
       }`}
     >
-      <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition duration-700 bg-[radial-gradient(circle_at_50%_0%,rgba(34,197,94,0.22),transparent_45%)]" />
-
       {featured && (
         <div className="absolute right-4 top-4 rounded-full bg-green-400/20 border border-green-400/40 px-3 py-1 text-xs font-black text-green-300">
           MÁS POPULAR
