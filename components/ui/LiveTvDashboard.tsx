@@ -187,7 +187,7 @@ export default function LiveTvDashboard() {
           dataModeColor={dataModeColor}
         />
 
-        <section className="grid grid-cols-[240px_minmax(0,1fr)_280px] gap-2 min-h-0">
+        <section className="grid grid-cols-[170px_minmax(0,1fr)_280px] gap-2 min-h-0">
           <MatchSelector
             matches={matches}
             selectedId={selected?.id ?? null}
