@@ -111,7 +111,7 @@ if (user.active_session_id && user.last_seen_at) {
   const lastSeen = new Date(user.last_seen_at).getTime();
   const activeLimit = Date.now() - 15 * 1000;
 
-  if (lastSeen > oneMinuteAgo) {
+  if (lastSeen > activeLimit) {
     console.log("Usuario ya conectado:", user.email);
     return null;
   }
@@ -129,14 +129,21 @@ if (user.active_session_id && user.last_seen_at) {
             last_seen_at: new Date().toISOString(),
           })
           .eq("id", user.id);
+const { error: logError } = await supabaseAdmin
+  .from("login_logs")
+  .insert({
+    user_id: user.id,
+    email: user.email,
+    role: "USER",
+    ip: "Login",
+    user_agent: "NextAuth Credentials",
+  });
 
-        await supabaseAdmin.from("login_logs").insert({
-          user_id: user.id,
-          email: user.email,
-          role: "USER",
-          ip: null,
-          user_agent: null,
-        });
+if (logError) {
+  console.error("❌ Error insertando login log:", logError);
+} else {
+  console.log("✅ Login guardado:", user.email);
+}
 
         return {
           id: user.id,

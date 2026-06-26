@@ -427,6 +427,13 @@ Nueva contraseña: ${newPassword}`
             </div>
 
             <div className="flex items-center gap-3">
+              <Link
+  href="/live-tv"
+  target="_blank"
+  className="bg-green-500 text-black rounded-full px-4 py-2 font-black hover:bg-green-400"
+>
+  📺 Live TV
+</Link>
               <button
                 onClick={refreshAll}
                 className="bg-white/10 text-white border border-white/10 rounded-full px-4 py-2 font-bold hover:bg-white/15"
