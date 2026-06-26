@@ -23,6 +23,13 @@ type LoginLog = {
   role: string | null;
   ip: string | null;
   user_agent: string | null;
+  browser: string | null;
+  os: string | null;
+  device: string | null;
+  country: string | null;
+  city: string | null;
+  latitude: number | null;
+  longitude: number | null;
   created_at: string;
 };
 
@@ -95,11 +102,14 @@ export default function AdminPage() {
     setUsers(data.users ?? []);
   }
 
-  async function loadLogs() {
-    const res = await fetch("/api/admin/login-logs", { cache: "no-store" });
-    const data = await res.json();
-    setLogs(data.logs ?? []);
-  }
+async function loadLogs() {
+  const res = await fetch("/api/admin/users/login-logs", {
+    cache: "no-store",
+  });
+
+  const data = await res.json();
+  setLogs(data.logs ?? []);
+}
 
   async function refreshAll() {
     await Promise.all([loadUsers(), loadLogs()]);
@@ -687,39 +697,47 @@ Nueva contraseña: ${newPassword}`
             </div>
 
             <div className="space-y-3 max-h-[360px] overflow-y-auto pr-1">
-              {logs.map((log) => (
-                <div
-                  key={log.id}
-                  className="grid grid-cols-[1.7fr_0.7fr_1fr_1fr_1.2fr_1.2fr] gap-3 items-center bg-[#0b1623] border border-white/10 rounded-2xl p-4 text-sm"
-                >
-                  <div>
-                    <div className="font-black">{log.email ?? "Sin email"}</div>
-                    <div className="text-white/40">
-                      {log.user_id ?? "Sin ID"}
-                    </div>
-                  </div>
 
-                  <div className="font-black text-green-400">
-                    {log.role ?? "USER"}
-                  </div>
 
-                  <div className="text-white/70 truncate">
-                    {log.ip ?? "Sin IP"}
-                  </div>
+{logs.map((log) => (
+  <div
+    key={log.id}
+    className="grid grid-cols-[1.7fr_0.7fr_1fr_1fr_1fr_1fr_1.2fr] gap-3 items-center bg-[#0b1623] border border-white/10 rounded-2xl p-4 text-sm"
+  >
+    <div>
+      <div className="font-black">{log.email ?? "Sin email"}</div>
+      <div className="text-white/40">{log.user_id ?? "Sin ID"}</div>
+    </div>
 
-                  <div className="text-white/70">
-                    {getDevice(log.user_agent)}
-                  </div>
+    <div className="font-black text-green-400">
+      {log.role ?? "USER"}
+    </div>
 
-                  <div className="text-white/70">
-                    {getBrowser(log.user_agent)}
-                  </div>
+    <div className="text-white/70 truncate">
+      {log.ip ?? "Sin IP"}
+    </div>
 
-                  <div className="text-white/50 text-xs">
-                    {formatDate(log.created_at)}
-                  </div>
-                </div>
-              ))}
+    <div className="text-white/70">
+      {log.device ?? getDevice(log.user_agent)}
+    </div>
+
+    <div className="text-white/70">
+      {log.browser ?? getBrowser(log.user_agent)}
+    </div>
+
+    <div className="text-white/70">
+      {log.city || log.country
+        ? `${log.city ?? ""} ${log.country ?? ""}`.trim()
+        : "Sin ubicación"}
+    </div>
+
+    <div className="text-white/50 text-xs">
+      {formatDate(log.created_at)}
+    </div>
+  </div>
+))}
+
+
 
               {logs.length === 0 && (
                 <div className="text-center text-white/40 py-8">

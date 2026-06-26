@@ -1038,3 +1038,27 @@
     print-color-adjust: exact !important;
   }
 }
+/* ===========================
+   LEAFLET
+=========================== */
+
+@import "leaflet/dist/leaflet.css";
+
+.leaflet-container{
+  width:100%;
+  height:100%;
+  background:#02070d;
+}
+
+.leaflet-popup-content{
+  margin:12px;
+  font-size:13px;
+}
+
+.leaflet-popup-content strong{
+  color:#16a34a;
+}
+
+.leaflet-control-attribution{
+  font-size:10px;
+}

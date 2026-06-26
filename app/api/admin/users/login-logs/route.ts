@@ -18,7 +18,22 @@ export async function GET(req: NextRequest) {
 
   const { data, error } = await supabaseAdmin
     .from("login_logs")
-    .select("id,user_id,email,role,ip,user_agent,created_at")
+    .select(`
+id,
+user_id,
+email,
+role,
+ip,
+user_agent,
+browser,
+os,
+device,
+country,
+city,
+latitude,
+longitude,
+created_at
+`)
     .order("created_at", { ascending: false })
     .limit(30);
 

@@ -27,22 +27,27 @@ const handler = NextAuth({
 
         if (!email || !password) return null;
 
-        const adminEmail = process.env.ADMIN_EMAIL;
+        const adminEmail = process.env.ADMIN_EMAIL?.toLowerCase().trim();
+        const adminPassword = process.env.ADMIN_PASSWORD;
         const adminPasswordHash = process.env.ADMIN_PASSWORD_HASH;
 
-        if (!adminEmail || !adminPasswordHash) {
-          throw new Error("Admin credentials not configured");
-        }
+        if (adminEmail && email === adminEmail) {
+          let ok = false;
 
-        const isAdminEmail = email === adminEmail.toLowerCase();
+          if (adminPasswordHash) {
+            try {
+              ok = await bcrypt.compare(password, adminPasswordHash);
+            } catch {
+              ok = false;
+            }
+          }
 
-        if (isAdminEmail) {
-          const isValidAdminPassword = await bcrypt.compare(
-            password,
-            adminPasswordHash
-          );
+          if (!ok && adminPassword) {
+            ok = password === adminPassword;
+          }
 
-          if (!isValidAdminPassword) return null;
+          if (!ok) return null;
+          console.log("LOGIN OK?", ok);
 
           return {
             id: "admin",
@@ -59,23 +64,13 @@ const handler = NextAuth({
 
         const { data: user, error } = await supabaseAdmin
           .from("app_users")
-
-
-
-  .select(
-  "id,email,name,password,plan,active,blocked,expires_at,active_session_id,last_seen_at"
-)
-
-
+          .select(
+            "id,email,name,password,plan,active,blocked,expires_at,active_session_id,last_seen_at"
+          )
           .eq("email", email)
           .maybeSingle();
 
-        if (error) {
-          console.error("Login user lookup error:", error);
-          return null;
-        }
-
-        if (!user) return null;
+        if (error || !user) return null;
         if (user.active === false) return null;
         if (user.blocked === true) return null;
 
@@ -107,18 +102,6 @@ const handler = NextAuth({
 
         if (!isValidPassword) return null;
 
-if (user.active_session_id && user.last_seen_at) {
-  const lastSeen = new Date(user.last_seen_at).getTime();
-  const activeLimit = Date.now() - 15 * 1000;
-
-  if (lastSeen > activeLimit) {
-    console.log("Usuario ya conectado:", user.email);
-    return null;
-  }
-}
-
-
-
         const sessionId = crypto.randomUUID();
 
         await supabaseAdmin
@@ -127,23 +110,9 @@ if (user.active_session_id && user.last_seen_at) {
             active_session_id: sessionId,
             last_login_at: new Date().toISOString(),
             last_seen_at: new Date().toISOString(),
+            login_logged: false,
           })
           .eq("id", user.id);
-const { error: logError } = await supabaseAdmin
-  .from("login_logs")
-  .insert({
-    user_id: user.id,
-    email: user.email,
-    role: "USER",
-    ip: "Login",
-    user_agent: "NextAuth Credentials",
-  });
-
-if (logError) {
-  console.error("❌ Error insertando login log:", logError);
-} else {
-  console.log("✅ Login guardado:", user.email);
-}
 
         return {
           id: user.id,
@@ -231,3 +200,4 @@ if (logError) {
 });
 
 export { handler as GET, handler as POST };
+

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import {
   Area,
   AreaChart,
@@ -12,6 +13,13 @@ import {
   YAxis,
 } from "recharts";
 
+const SecurityMap = dynamic(
+  () => import("@/components/ui/admin/SecurityMap").then((mod) => mod.default),
+  {
+    ssr: false,
+  }
+);
+
 type Attempt = {
   id?: string;
   email: string | null;
@@ -19,6 +27,20 @@ type Attempt = {
   user_agent?: string | null;
   success: boolean;
   reason: string | null;
+  created_at: string;
+};
+
+type LoginLog = {
+  id: string;
+  email: string | null;
+  ip: string | null;
+  browser: string | null;
+  os: string | null;
+  device: string | null;
+  country: string | null;
+  city: string | null;
+  latitude: number | null;
+  longitude: number | null;
   created_at: string;
 };
 
@@ -40,8 +62,7 @@ function getRisk(failed: number, suspiciousIps: number) {
 
 function riskStyle(risk: string) {
   if (risk === "HIGH") return "text-red-400 border-red-500/30 bg-red-500/10";
-  if (risk === "MEDIUM")
-    return "text-yellow-300 border-yellow-500/30 bg-yellow-500/10";
+  if (risk === "MEDIUM") return "text-yellow-300 border-yellow-500/30 bg-yellow-500/10";
   return "text-green-400 border-green-500/30 bg-green-500/10";
 }
 
@@ -51,6 +72,7 @@ function formatDate(value: string) {
 
 function getHourlyData(attempts: Attempt[]) {
   const now = new Date();
+
   const hours = Array.from({ length: 24 }, (_, i) => {
     const d = new Date(now);
     d.setHours(now.getHours() - (23 - i), 0, 0, 0);
@@ -84,6 +106,7 @@ function getHourlyData(attempts: Attempt[]) {
 
 export default function SecurityPage() {
   const [data, setData] = useState<SecurityResponse | null>(null);
+  const [logs, setLogs] = useState<LoginLog[]>([]);
   const [loading, setLoading] = useState(true);
 
   async function loadSecurity() {
@@ -106,8 +129,18 @@ export default function SecurityPage() {
     }
   }
 
+  async function loadLoginLogs() {
+    const res = await fetch("/api/admin/users/login-logs", {
+      cache: "no-store",
+    });
+
+    const json = await res.json();
+    setLogs(json.logs ?? []);
+  }
+
   useEffect(() => {
     loadSecurity();
+    loadLoginLogs();
   }, []);
 
   const attempts = data?.attempts ?? [];
@@ -120,10 +153,7 @@ export default function SecurityPage() {
     <main className="min-h-screen bg-[#03070b] text-white p-8">
       <div className="flex items-center justify-between mb-8">
         <div>
-          <Link
-            href="/admin"
-            className="text-green-400 hover:text-green-300 font-bold"
-          >
+          <Link href="/admin" className="text-green-400 hover:text-green-300 font-bold">
             ← Volver al panel
           </Link>
 
@@ -137,7 +167,10 @@ export default function SecurityPage() {
         </div>
 
         <button
-          onClick={loadSecurity}
+          onClick={() => {
+            loadSecurity();
+            loadLoginLogs();
+          }}
           className="bg-green-500 hover:bg-green-400 text-black font-black px-5 py-3 rounded-xl"
         >
           Actualizar
@@ -151,11 +184,7 @@ export default function SecurityPage() {
       ) : (
         <>
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-5 mb-8">
-            <div
-              className={`lg:col-span-1 rounded-2xl border p-6 ${riskStyle(
-                risk
-              )}`}
-            >
+            <div className={`lg:col-span-1 rounded-2xl border p-6 ${riskStyle(risk)}`}>
               <p className="text-sm opacity-80">Riesgo actual</p>
               <p className="text-4xl font-black mt-3">{risk}</p>
               <p className="text-xs opacity-70 mt-2">
@@ -166,10 +195,7 @@ export default function SecurityPage() {
             <Card title="Intentos" value={stats?.total ?? 0} />
             <Card title="Correctos" value={stats?.success ?? 0} />
             <Card title="Fallidos" value={stats?.failed ?? 0} />
-            <Card
-              title="IPs sospechosas"
-              value={stats?.suspiciousIps?.length ?? 0}
-            />
+            <Card title="IPs sospechosas" value={stats?.suspiciousIps?.length ?? 0} />
           </div>
 
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-8">
@@ -229,11 +255,9 @@ export default function SecurityPage() {
                         {ip.risk}
                       </span>
                     </div>
+
                     <p className="text-white/50 text-sm mt-2">
-                      Fallos:{" "}
-                      <span className="text-red-400 font-black">
-                        {ip.count}
-                      </span>
+                      Fallos: <span className="text-red-400 font-black">{ip.count}</span>
                     </p>
                   </div>
                 ))}
@@ -245,6 +269,94 @@ export default function SecurityPage() {
                 )}
               </div>
             </section>
+          </div>
+
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-8">
+            <section className="xl:col-span-2 bg-[#07111c] border border-white/10 rounded-3xl p-6">
+              <div className="mb-5">
+                <h2 className="text-2xl font-black">🌍 Mapa de conexiones</h2>
+                <p className="text-white/40 text-sm">
+                  Últimas ubicaciones detectadas por IP.
+                </p>
+              </div>
+
+              <SecurityMap logs={logs} />
+            </section>
+
+            <section className="bg-[#07111c] border border-white/10 rounded-3xl p-6">
+              <h2 className="text-2xl font-black mb-2">🌎 Países conectados</h2>
+              <p className="text-white/40 text-sm mb-5">
+                Accesos agrupados por país.
+              </p>
+
+              <div className="space-y-3 max-h-80 overflow-y-auto">
+                {Object.entries(
+                  logs.reduce((acc: Record<string, number>, log) => {
+                    const country = log.country ?? "Sin ubicación";
+                    acc[country] = (acc[country] ?? 0) + 1;
+                    return acc;
+                  }, {})
+                )
+                  .sort((a, b) => b[1] - a[1])
+                  .slice(0, 10)
+                  .map(([country, count]) => (
+                    <div
+                      key={country}
+                      className="bg-[#0b1623] border border-white/10 rounded-2xl p-4 flex justify-between items-center"
+                    >
+                      <div>
+                        <div className="font-black">{country}</div>
+                        <div className="text-white/40 text-sm">Conexiones</div>
+                      </div>
+
+                      <div className="text-3xl font-black text-green-400">
+                        {count}
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </section>
+          </div>
+
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-8">
+            <StatsBox
+              title="🌐 Navegadores"
+              items={Object.entries(
+                logs.reduce((acc: Record<string, number>, log) => {
+                  const key = log.browser ?? "Desconocido";
+                  acc[key] = (acc[key] ?? 0) + 1;
+                  return acc;
+                }, {})
+              )
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 8)}
+            />
+
+            <StatsBox
+              title="💻 Sistemas"
+              items={Object.entries(
+                logs.reduce((acc: Record<string, number>, log) => {
+                  const key = log.os ?? "Desconocido";
+                  acc[key] = (acc[key] ?? 0) + 1;
+                  return acc;
+                }, {})
+              )
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 8)}
+            />
+
+            <StatsBox
+              title="📱 Dispositivos"
+              items={Object.entries(
+                logs.reduce((acc: Record<string, number>, log) => {
+                  const key = log.device ?? "Desconocido";
+                  acc[key] = (acc[key] ?? 0) + 1;
+                  return acc;
+                }, {})
+              )
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 8)}
+            />
           </div>
 
           <section className="bg-[#07111c] border border-white/10 rounded-3xl overflow-hidden">
@@ -317,6 +429,52 @@ export default function SecurityPage() {
         </>
       )}
     </main>
+  );
+}
+
+function StatsBox({
+  title,
+  items,
+}: {
+  title: string;
+  items: [string, number][];
+}) {
+  const total = items.reduce((sum, [, value]) => sum + value, 0);
+
+  return (
+    <section className="bg-[#07111c] border border-white/10 rounded-3xl p-6">
+      <h2 className="text-2xl font-black mb-5">{title}</h2>
+
+      <div className="space-y-4">
+        {items.map(([label, count]) => {
+          const percent = total > 0 ? Math.round((count / total) * 100) : 0;
+
+          return (
+            <div key={label}>
+              <div className="flex justify-between text-sm mb-2">
+                <span className="font-bold">{label}</span>
+                <span className="text-green-400 font-black">
+                  {count} · {percent}%
+                </span>
+              </div>
+
+              <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-green-400 rounded-full"
+                  style={{ width: `${percent}%` }}
+                />
+              </div>
+            </div>
+          );
+        })}
+
+        {items.length === 0 && (
+          <div className="text-center text-white/40 py-10">
+            Sin datos todavía.
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
 
