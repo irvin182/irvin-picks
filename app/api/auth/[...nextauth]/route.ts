@@ -2,6 +2,7 @@ import NextAuth from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { saveLogin } from "@/lib/loginLogger";
 
 if (!process.env.NEXTAUTH_SECRET) {
   throw new Error("NEXTAUTH_SECRET is not configured");
@@ -21,7 +22,7 @@ const handler = NextAuth({
         password: { label: "Password", type: "password" },
       },
 
-      async authorize(credentials) {
+      async authorize(credentials, req) {
         const email = String(credentials?.email ?? "").toLowerCase().trim();
         const password = String(credentials?.password ?? "");
 
@@ -98,6 +99,11 @@ const handler = NextAuth({
             .from("app_users")
             .update({ password: newHash })
             .eq("id", user.id);
+            await saveLogin(req as any, {
+  id: user.id,
+  email: user.email,
+  role: "USER",
+});
         }
 
         if (!isValidPassword) return null;
