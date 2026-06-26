@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
+import SecuritySummary from "@/components/security/SecuritySummary";
 import {
   Area,
   AreaChart,
@@ -15,16 +16,13 @@ import {
 
 const SecurityMap = dynamic(
   () => import("@/components/ui/admin/SecurityMap").then((mod) => mod.default),
-  {
-    ssr: false,
-  }
+  { ssr: false }
 );
 
 type Attempt = {
   id?: string;
   email: string | null;
   ip: string | null;
-  user_agent?: string | null;
   success: boolean;
   reason: string | null;
   created_at: string;
@@ -44,21 +42,36 @@ type LoginLog = {
   created_at: string;
 };
 
-type SecurityResponse = {
-  attempts: Attempt[];
-  stats: {
-    total: number;
-    success: number;
-    failed: number;
-    suspiciousIps: any[];
-  };
+type SecurityEvent = {
+  id: string;
+  type: string;
+  title: string;
+  email: string | null;
+  ip: string | null;
+  browser: string | null;
+  os: string | null;
+  device: string | null;
+  country: string | null;
+  city: string | null;
+  reason?: string | null;
+  risk: string;
+  created_at: string;
 };
 
-function getRisk(failed: number, suspiciousIps: number) {
-  if (failed >= 15 || suspiciousIps >= 5) return "HIGH";
-  if (failed >= 5 || suspiciousIps >= 2) return "MEDIUM";
-  return "LOW";
-}
+type SecurityResponse = {
+  summary: {
+    risk: string;
+    attempts: number;
+    success: number;
+    failed: number;
+    suspiciousIps: number;
+    events?: number;
+  };
+  attempts: Attempt[];
+  logs: LoginLog[];
+  events: SecurityEvent[];
+  countries: Record<string, number>;
+};
 
 function riskStyle(risk: string) {
   if (risk === "HIGH") return "text-red-400 border-red-500/30 bg-red-500/10";
@@ -93,30 +106,41 @@ function getHourlyData(attempts: Attempt[]) {
       const index = 23 - diffHours;
       hours[index].total += 1;
 
-      if (a.success) {
-        hours[index].success += 1;
-      } else {
-        hours[index].failed += 1;
-      }
+      if (a.success) hours[index].success += 1;
+      else hours[index].failed += 1;
     }
   });
 
   return hours;
 }
 
+function getTopSuspiciousIps(attempts: Attempt[]) {
+  const failed = attempts.filter((a) => a.success === false && a.ip);
+
+  const grouped = failed.reduce((acc: Record<string, number>, item) => {
+    const ip = item.ip || "Sin IP";
+    acc[ip] = (acc[ip] ?? 0) + 1;
+    return acc;
+  }, {});
+
+  return Object.entries(grouped)
+    .map(([ip, count]) => ({
+      ip,
+      count,
+      risk: count >= 10 ? "HIGH" : count >= 3 ? "MEDIUM" : "LOW",
+    }))
+    .sort((a, b) => b.count - a.count);
+}
+
 export default function SecurityPage() {
   const [data, setData] = useState<SecurityResponse | null>(null);
-  const [logs, setLogs] = useState<LoginLog[]>([]);
   const [loading, setLoading] = useState(true);
 
   async function loadSecurity() {
     setLoading(true);
 
     try {
-      const res = await fetch("/api/admin/security", {
-        cache: "no-store",
-      });
-
+      const res = await fetch("/api/admin/security", { cache: "no-store" });
       if (!res.ok) throw new Error("Error cargando seguridad");
 
       const json = await res.json();
@@ -129,25 +153,17 @@ export default function SecurityPage() {
     }
   }
 
-  async function loadLoginLogs() {
-    const res = await fetch("/api/admin/users/login-logs", {
-      cache: "no-store",
-    });
-
-    const json = await res.json();
-    setLogs(json.logs ?? []);
-  }
-
   useEffect(() => {
     loadSecurity();
-    loadLoginLogs();
   }, []);
 
   const attempts = data?.attempts ?? [];
-  const stats = data?.stats;
-  const risk = getRisk(stats?.failed ?? 0, stats?.suspiciousIps?.length ?? 0);
+  const logs = data?.logs ?? [];
+  const events = data?.events ?? [];
+  const summary = data?.summary;
+
   const chartData = useMemo(() => getHourlyData(attempts), [attempts]);
-  const lastEvents = attempts.slice(0, 8);
+  const topSuspiciousIps = useMemo(() => getTopSuspiciousIps(attempts), [attempts]);
 
   return (
     <main className="min-h-screen bg-[#03070b] text-white p-8">
@@ -167,10 +183,7 @@ export default function SecurityPage() {
         </div>
 
         <button
-          onClick={() => {
-            loadSecurity();
-            loadLoginLogs();
-          }}
+          onClick={loadSecurity}
           className="bg-green-500 hover:bg-green-400 text-black font-black px-5 py-3 rounded-xl"
         >
           Actualizar
@@ -183,20 +196,7 @@ export default function SecurityPage() {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-5 mb-8">
-            <div className={`lg:col-span-1 rounded-2xl border p-6 ${riskStyle(risk)}`}>
-              <p className="text-sm opacity-80">Riesgo actual</p>
-              <p className="text-4xl font-black mt-3">{risk}</p>
-              <p className="text-xs opacity-70 mt-2">
-                Calculado por fallos e IPs sospechosas.
-              </p>
-            </div>
-
-            <Card title="Intentos" value={stats?.total ?? 0} />
-            <Card title="Correctos" value={stats?.success ?? 0} />
-            <Card title="Fallidos" value={stats?.failed ?? 0} />
-            <Card title="IPs sospechosas" value={stats?.suspiciousIps?.length ?? 0} />
-          </div>
+          <SecuritySummary summary={summary} />
 
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-8">
             <section className="xl:col-span-2 bg-[#07111c] border border-white/10 rounded-3xl p-6">
@@ -214,20 +214,8 @@ export default function SecurityPage() {
                     <XAxis dataKey="hour" tick={{ fontSize: 11 }} />
                     <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
                     <Tooltip />
-                    <Area
-                      type="monotone"
-                      dataKey="total"
-                      stroke="#22c55e"
-                      fill="#22c55e"
-                      fillOpacity={0.18}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="failed"
-                      stroke="#ef4444"
-                      fill="#ef4444"
-                      fillOpacity={0.12}
-                    />
+                    <Area type="monotone" dataKey="total" stroke="#22c55e" fill="#22c55e" fillOpacity={0.18} />
+                    <Area type="monotone" dataKey="failed" stroke="#ef4444" fill="#ef4444" fillOpacity={0.12} />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
@@ -240,18 +228,11 @@ export default function SecurityPage() {
               </p>
 
               <div className="space-y-3 max-h-72 overflow-y-auto">
-                {(stats?.suspiciousIps ?? []).slice(0, 8).map((ip: any) => (
-                  <div
-                    key={ip.ip}
-                    className="bg-[#0b1623] border border-white/10 rounded-2xl p-4"
-                  >
+                {topSuspiciousIps.slice(0, 8).map((ip) => (
+                  <div key={ip.ip} className="bg-[#0b1623] border border-white/10 rounded-2xl p-4">
                     <div className="flex justify-between gap-3">
                       <p className="font-mono text-sm truncate">{ip.ip}</p>
-                      <span
-                        className={`text-xs font-black rounded-full border px-3 py-1 ${riskStyle(
-                          ip.risk
-                        )}`}
-                      >
+                      <span className={`text-xs font-black rounded-full border px-3 py-1 ${riskStyle(ip.risk)}`}>
                         {ip.risk}
                       </span>
                     </div>
@@ -262,7 +243,7 @@ export default function SecurityPage() {
                   </div>
                 ))}
 
-                {(stats?.suspiciousIps ?? []).length === 0 && (
+                {topSuspiciousIps.length === 0 && (
                   <div className="text-white/40 text-center py-10">
                     No hay IPs sospechosas.
                   </div>
@@ -290,28 +271,17 @@ export default function SecurityPage() {
               </p>
 
               <div className="space-y-3 max-h-80 overflow-y-auto">
-                {Object.entries(
-                  logs.reduce((acc: Record<string, number>, log) => {
-                    const country = log.country ?? "Sin ubicación";
-                    acc[country] = (acc[country] ?? 0) + 1;
-                    return acc;
-                  }, {})
-                )
+                {Object.entries(data?.countries ?? {})
                   .sort((a, b) => b[1] - a[1])
                   .slice(0, 10)
                   .map(([country, count]) => (
-                    <div
-                      key={country}
-                      className="bg-[#0b1623] border border-white/10 rounded-2xl p-4 flex justify-between items-center"
-                    >
+                    <div key={country} className="bg-[#0b1623] border border-white/10 rounded-2xl p-4 flex justify-between items-center">
                       <div>
                         <div className="font-black">{country}</div>
                         <div className="text-white/40 text-sm">Conexiones</div>
                       </div>
 
-                      <div className="text-3xl font-black text-green-400">
-                        {count}
-                      </div>
+                      <div className="text-3xl font-black text-green-400">{count}</div>
                     </div>
                   ))}
               </div>
@@ -319,106 +289,58 @@ export default function SecurityPage() {
           </div>
 
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-8">
-            <StatsBox
-              title="🌐 Navegadores"
-              items={Object.entries(
-                logs.reduce((acc: Record<string, number>, log) => {
-                  const key = log.browser ?? "Desconocido";
-                  acc[key] = (acc[key] ?? 0) + 1;
-                  return acc;
-                }, {})
-              )
-                .sort((a, b) => b[1] - a[1])
-                .slice(0, 8)}
-            />
-
-            <StatsBox
-              title="💻 Sistemas"
-              items={Object.entries(
-                logs.reduce((acc: Record<string, number>, log) => {
-                  const key = log.os ?? "Desconocido";
-                  acc[key] = (acc[key] ?? 0) + 1;
-                  return acc;
-                }, {})
-              )
-                .sort((a, b) => b[1] - a[1])
-                .slice(0, 8)}
-            />
-
-            <StatsBox
-              title="📱 Dispositivos"
-              items={Object.entries(
-                logs.reduce((acc: Record<string, number>, log) => {
-                  const key = log.device ?? "Desconocido";
-                  acc[key] = (acc[key] ?? 0) + 1;
-                  return acc;
-                }, {})
-              )
-                .sort((a, b) => b[1] - a[1])
-                .slice(0, 8)}
-            />
+            <StatsBox title="🌐 Navegadores" field="browser" logs={logs} />
+            <StatsBox title="💻 Sistemas" field="os" logs={logs} />
+            <StatsBox title="📱 Dispositivos" field="device" logs={logs} />
           </div>
 
           <section className="bg-[#07111c] border border-white/10 rounded-3xl overflow-hidden">
-            <div className="p-6 border-b border-white/10 flex justify-between items-center">
-              <div>
-                <h2 className="text-2xl font-black">Últimos eventos</h2>
-                <p className="text-white/40 text-sm">
-                  Últimos intentos de acceso registrados.
-                </p>
-              </div>
+            <div className="p-6 border-b border-white/10">
+              <h2 className="text-2xl font-black">Últimos eventos</h2>
+              <p className="text-white/40 text-sm">
+                Últimos accesos, intentos y eventos de seguridad registrados.
+              </p>
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[900px]">
+              <table className="w-full min-w-[1100px]">
                 <thead className="bg-[#0b1623]">
                   <tr>
                     <th className="text-left p-4">Fecha</th>
+                    <th className="text-left p-4">Evento</th>
                     <th className="text-left p-4">Email</th>
                     <th className="text-left p-4">IP</th>
-                    <th className="text-left p-4">Estado</th>
-                    <th className="text-left p-4">Motivo</th>
+                    <th className="text-left p-4">Ubicación</th>
+                    <th className="text-left p-4">Dispositivo</th>
+                    <th className="text-left p-4">Riesgo</th>
                   </tr>
                 </thead>
 
                 <tbody>
-                  {lastEvents.map((item, index) => (
-                    <tr
-                      key={item.id ?? index}
-                      className="border-t border-white/10 hover:bg-white/5"
-                    >
+                  {events.slice(0, 20).map((event) => (
+                    <tr key={event.id} className="border-t border-white/10 hover:bg-white/5">
+                      <td className="p-4 text-white/70">{formatDate(event.created_at)}</td>
+                      <td className="p-4 font-black">{event.title}</td>
+                      <td className="p-4">{event.email ?? "Sin email"}</td>
+                      <td className="p-4 font-mono text-sm">{event.ip ?? "Sin IP"}</td>
                       <td className="p-4 text-white/70">
-                        {formatDate(item.created_at)}
+                        {[event.city, event.country].filter(Boolean).join(", ") || "Sin ubicación"}
                       </td>
-
-                      <td className="p-4">{item.email ?? "Sin email"}</td>
-
-                      <td className="p-4 font-mono text-sm">
-                        {item.ip ?? "Sin IP"}
+                      <td className="p-4 text-white/70">
+                        {[event.device, event.os, event.browser].filter(Boolean).join(" · ") || "-"}
                       </td>
-
                       <td className="p-4">
-                        {item.success ? (
-                          <span className="text-green-400 font-black">
-                            ✔ Correcto
-                          </span>
-                        ) : (
-                          <span className="text-red-400 font-black">
-                            ✖ Fallido
-                          </span>
-                        )}
-                      </td>
-
-                      <td className="p-4 text-white/60">
-                        {item.reason ?? "-"}
+                        <span className={`text-xs font-black rounded-full border px-3 py-1 ${riskStyle(event.risk)}`}>
+                          {event.risk}
+                        </span>
                       </td>
                     </tr>
                   ))}
 
-                  {lastEvents.length === 0 && (
+                  {events.length === 0 && (
                     <tr>
-                      <td colSpan={5} className="text-center text-white/40 py-12">
-                        No existen registros todavía.
+                      <td colSpan={7} className="text-center text-white/40 py-12">
+                        No existen eventos todavía.
                       </td>
                     </tr>
                   )}
@@ -434,11 +356,23 @@ export default function SecurityPage() {
 
 function StatsBox({
   title,
-  items,
+  field,
+  logs,
 }: {
   title: string;
-  items: [string, number][];
+  field: "browser" | "os" | "device";
+  logs: LoginLog[];
 }) {
+  const items = Object.entries(
+    logs.reduce((acc: Record<string, number>, log) => {
+      const key = log[field] ?? "Desconocido";
+      acc[key] = (acc[key] ?? 0) + 1;
+      return acc;
+    }, {})
+  )
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 8);
+
   const total = items.reduce((sum, [, value]) => sum + value, 0);
 
   return (
@@ -459,10 +393,7 @@ function StatsBox({
               </div>
 
               <div className="h-2 bg-white/10 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-green-400 rounded-full"
-                  style={{ width: `${percent}%` }}
-                />
+                <div className="h-full bg-green-400 rounded-full" style={{ width: `${percent}%` }} />
               </div>
             </div>
           );
@@ -475,14 +406,5 @@ function StatsBox({
         )}
       </div>
     </section>
-  );
-}
-
-function Card({ title, value }: { title: string; value: number }) {
-  return (
-    <div className="bg-[#07111c] rounded-2xl border border-white/10 p-6">
-      <p className="text-white/50 text-sm">{title}</p>
-      <p className="text-4xl font-black text-green-400 mt-3">{value}</p>
-    </div>
   );
 }
