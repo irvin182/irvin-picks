@@ -8,6 +8,45 @@ if (!process.env.NEXTAUTH_SECRET) {
   throw new Error("NEXTAUTH_SECRET is not configured");
 }
 
+function getClientIp(req: any) {
+  const forwarded = req?.headers?.get?.("x-forwarded-for");
+
+  return (
+    forwarded?.split(",")[0]?.trim() ||
+    req?.headers?.get?.("x-real-ip") ||
+    "Desconocida"
+  );
+}
+
+function getUserAgent(req: any) {
+  return req?.headers?.get?.("user-agent") || "Desconocido";
+}
+
+async function saveLoginAttempt(
+  req: any,
+  payload: {
+    email: string;
+    success: boolean;
+    reason: string;
+  }
+) {
+  try {
+    const { error } = await supabaseAdmin.from("login_attempts").insert({
+      email: payload.email,
+      ip: getClientIp(req),
+      user_agent: getUserAgent(req),
+      success: payload.success,
+      reason: payload.reason,
+    });
+
+    if (error) {
+      console.error("❌ ERROR INSERTANDO LOGIN_ATTEMPT:", error);
+    }
+  } catch (err) {
+    console.error("❌ Error guardando login_attempt:", err);
+  }
+}
+
 const handler = NextAuth({
   session: {
     strategy: "jwt",
@@ -25,8 +64,16 @@ const handler = NextAuth({
       async authorize(credentials, req) {
         const email = String(credentials?.email ?? "").toLowerCase().trim();
         const password = String(credentials?.password ?? "");
+console.log("🔥 GUARDANDO LOGIN ATTEMPT");
+        if (!email || !password) {
+          await saveLoginAttempt(req, {
+            email: email || "Sin email",
+            success: false,
+            reason: "missing_credentials",
+          });
 
-        if (!email || !password) return null;
+          return null;
+        }
 
         const adminEmail = process.env.ADMIN_EMAIL?.toLowerCase().trim();
         const adminPassword = process.env.ADMIN_PASSWORD;
@@ -47,8 +94,21 @@ const handler = NextAuth({
             ok = password === adminPassword;
           }
 
-          if (!ok) return null;
-          console.log("LOGIN OK?", ok);
+          if (!ok) {
+            await saveLoginAttempt(req, {
+              email,
+              success: false,
+              reason: "admin_invalid_password",
+            });
+
+            return null;
+          }
+
+          await saveLoginAttempt(req, {
+            email,
+            success: true,
+            reason: "admin_login_success",
+          });
 
           return {
             id: "admin",
@@ -71,14 +131,46 @@ const handler = NextAuth({
           .eq("email", email)
           .maybeSingle();
 
-        if (error || !user) return null;
-        if (user.active === false) return null;
-        if (user.blocked === true) return null;
+        if (error || !user) {
+          await saveLoginAttempt(req, {
+            email,
+            success: false,
+            reason: "user_not_found",
+          });
+
+          return null;
+        }
+
+        if (user.active === false) {
+          await saveLoginAttempt(req, {
+            email,
+            success: false,
+            reason: "user_inactive",
+          });
+
+          return null;
+        }
+
+        if (user.blocked === true) {
+          await saveLoginAttempt(req, {
+            email,
+            success: false,
+            reason: "user_blocked",
+          });
+
+          return null;
+        }
 
         if (
           user.expires_at &&
           new Date(user.expires_at).getTime() < Date.now()
         ) {
+          await saveLoginAttempt(req, {
+            email,
+            success: false,
+            reason: "user_expired",
+          });
+
           return null;
         }
 
@@ -99,14 +191,17 @@ const handler = NextAuth({
             .from("app_users")
             .update({ password: newHash })
             .eq("id", user.id);
-            await saveLogin(req as any, {
-  id: user.id,
-  email: user.email,
-  role: "USER",
-});
         }
 
-        if (!isValidPassword) return null;
+        if (!isValidPassword) {
+          await saveLoginAttempt(req, {
+            email,
+            success: false,
+            reason: "invalid_password",
+          });
+
+          return null;
+        }
 
         const sessionId = crypto.randomUUID();
 
@@ -119,6 +214,18 @@ const handler = NextAuth({
             login_logged: false,
           })
           .eq("id", user.id);
+
+        await saveLoginAttempt(req, {
+          email: user.email,
+          success: true,
+          reason: "login_success",
+        });
+
+        await saveLogin(req as any, {
+          id: user.id,
+          email: user.email,
+          role: "USER",
+        });
 
         return {
           id: user.id,
@@ -206,4 +313,3 @@ const handler = NextAuth({
 });
 
 export { handler as GET, handler as POST };
-
