@@ -30,6 +30,22 @@ type LoginAttempt = {
   created_at: string;
 };
 
+type SecurityEvent = {
+  id: string;
+  email: string | null;
+  type: string;
+  title: string;
+  risk: Risk;
+  ip: string | null;
+  country: string | null;
+  city: string | null;
+  browser: string | null;
+  os: string | null;
+  device: string | null;
+  reason: string | null;
+  created_at: string;
+};
+
 async function isAdmin(req: NextRequest) {
   const token = await getToken({
     req,
@@ -39,18 +55,9 @@ async function isAdmin(req: NextRequest) {
   return String((token as any)?.role ?? "").toUpperCase() === "ADMIN";
 }
 
-function normalize(value: string | null | undefined) {
-  return String(value ?? "").trim();
-}
-
 function hasValue(value: string | null | undefined) {
-  const clean = normalize(value);
+  const clean = String(value ?? "").trim();
   return clean.length > 0 && clean !== "Sin ubicación" && clean !== "Sin IP";
-}
-
-function maxRisk(a: Risk, b: Risk): Risk {
-  const score = { LOW: 1, MEDIUM: 2, HIGH: 3 };
-  return score[b] > score[a] ? b : a;
 }
 
 function getAttemptRisk(attempt: LoginAttempt, failedByIp: Record<string, number>): Risk {
@@ -67,147 +74,31 @@ function getAttemptTitle(attempt: LoginAttempt, failedByIp: Record<string, numbe
   if (attempt.success) return "Intento de login correcto";
 
   const count = attempt.ip ? failedByIp[attempt.ip] ?? 0 : 0;
-
   if (count >= 5) return "Múltiples intentos fallidos desde la misma IP";
 
   return "Intento de login fallido";
 }
 
-function buildSuspiciousEventsForLog(log: LoginLog, previousLogs: LoginLog[]) {
-  const events: any[] = [];
-
-  const previousIps = new Set(
-    previousLogs.map((item) => item.ip).filter((ip) => hasValue(ip))
-  );
-
-  const previousCountries = new Set(
-    previousLogs.map((item) => item.country).filter((country) => hasValue(country))
-  );
-
-  const previousCities = new Set(
-    previousLogs.map((item) => item.city).filter((city) => hasValue(city))
-  );
-
-  const previousBrowsers = new Set(
-    previousLogs.map((item) => item.browser).filter((browser) => hasValue(browser))
-  );
-
-  const previousDevices = new Set(
-    previousLogs.map((item) => item.device).filter((device) => hasValue(device))
-  );
-
-  const base = {
-    email: log.email,
-    role: log.role,
-    ip: log.ip,
-    browser: log.browser,
-    os: log.os,
-    device: log.device,
-    country: log.country || "Sin ubicación",
-    city: log.city,
-    latitude: log.latitude,
-    longitude: log.longitude,
-    created_at: log.created_at,
-  };
-
-  if (hasValue(log.ip) && previousIps.size > 0 && !previousIps.has(log.ip)) {
-    events.push({
-      id: `new-ip-${log.id}`,
-      type: "NEW_IP",
-      title: "Nueva IP detectada",
-      risk: "MEDIUM",
-      reason: "El usuario inició sesión desde una IP no vista anteriormente.",
-      ...base,
-    });
-  }
-
-  if (
-    hasValue(log.country) &&
-    previousCountries.size > 0 &&
-    !previousCountries.has(log.country)
-  ) {
-    events.push({
-      id: `country-change-${log.id}`,
-      type: "COUNTRY_CHANGE",
-      title: "Cambio de país detectado",
-      risk: "HIGH",
-      reason: "El usuario inició sesión desde un país distinto al habitual.",
-      ...base,
-    });
-  }
-
-  if (hasValue(log.city) && previousCities.size > 0 && !previousCities.has(log.city)) {
-    events.push({
-      id: `city-change-${log.id}`,
-      type: "CITY_CHANGE",
-      title: "Nueva ciudad detectada",
-      risk: "MEDIUM",
-      reason: "El usuario inició sesión desde una ciudad distinta.",
-      ...base,
-    });
-  }
-
-  if (
-    hasValue(log.browser) &&
-    previousBrowsers.size > 0 &&
-    !previousBrowsers.has(log.browser)
-  ) {
-    events.push({
-      id: `browser-change-${log.id}`,
-      type: "NEW_BROWSER",
-      title: "Nuevo navegador detectado",
-      risk: "MEDIUM",
-      reason: "El usuario inició sesión desde un navegador no visto antes.",
-      ...base,
-    });
-  }
-
-  if (
-    hasValue(log.device) &&
-    previousDevices.size > 0 &&
-    !previousDevices.has(log.device)
-  ) {
-    events.push({
-      id: `device-change-${log.id}`,
-      type: "NEW_DEVICE",
-      title: "Nuevo dispositivo detectado",
-      risk: "MEDIUM",
-      reason: "El usuario inició sesión desde un dispositivo no visto antes.",
-      ...base,
-    });
-  }
-
-  return events;
+function normalizeRisk(value: string | null | undefined): Risk {
+  const risk = String(value ?? "LOW").toUpperCase();
+  if (risk === "HIGH") return "HIGH";
+  if (risk === "MEDIUM") return "MEDIUM";
+  return "LOW";
 }
 
-function buildLoginEvent(log: LoginLog, suspiciousEvents: any[]) {
-  let risk: Risk = "LOW";
+function calculateGlobalRisk(events: any[], suspiciousIps: any[]): Risk {
+  const hasHigh = events.some((event) => event.risk === "HIGH");
+  const hasMedium = events.some((event) => event.risk === "MEDIUM");
 
-  for (const event of suspiciousEvents) {
-    risk = maxRisk(risk, event.risk);
+  if (hasHigh || suspiciousIps.some((ip) => ip.risk === "HIGH")) {
+    return "HIGH";
   }
 
-  if (!hasValue(log.country)) {
-    risk = maxRisk(risk, "MEDIUM");
+  if (hasMedium || suspiciousIps.length > 0) {
+    return "MEDIUM";
   }
 
-  return {
-    id: `log-${log.id}`,
-    type: "LOGIN_SUCCESS",
-    title: "Inicio de sesión correcto",
-    email: log.email,
-    role: log.role,
-    ip: log.ip,
-    browser: log.browser,
-    os: log.os,
-    device: log.device,
-    country: log.country || "Sin ubicación",
-    city: log.city,
-    latitude: log.latitude,
-    longitude: log.longitude,
-    risk,
-    created_at: log.created_at,
-  };
+  return "LOW";
 }
 
 export async function GET(req: NextRequest) {
@@ -240,8 +131,21 @@ export async function GET(req: NextRequest) {
     .order("created_at", { ascending: false })
     .limit(500);
 
+  const { data: smartEvents, error: smartEventsError } = await supabaseAdmin
+    .from("security_events")
+    .select("id,email,type,title,risk,ip,country,city,browser,os,device,reason,created_at")
+    .order("created_at", { ascending: false })
+    .limit(500);
+
+  if (smartEventsError) {
+    console.error("Error cargando security_events:", smartEventsError);
+  }
+
   const safeLogs = (logs ?? []) as LoginLog[];
   const safeAttempts = attemptsError ? [] : ((attempts ?? []) as LoginAttempt[]);
+  const safeSmartEvents = smartEventsError
+    ? []
+    : ((smartEvents ?? []) as SecurityEvent[]);
 
   const failed = safeAttempts.filter((a) => a.success === false);
   const success = safeAttempts.filter((a) => a.success === true);
@@ -267,29 +171,23 @@ export async function GET(req: NextRequest) {
     return acc;
   }, {});
 
-  const logsByUser = safeLogs.reduce((acc: Record<string, LoginLog[]>, log) => {
-    const key = log.user_id || log.email || "unknown";
-    if (!acc[key]) acc[key] = [];
-    acc[key].push(log);
-    return acc;
-  }, {});
-
-  const allEvents: any[] = [];
-
-  for (const log of safeLogs) {
-    const key = log.user_id || log.email || "unknown";
-    const userLogs = logsByUser[key] ?? [];
-
-    const previousLogs = userLogs.filter(
-      (item) => new Date(item.created_at).getTime() < new Date(log.created_at).getTime()
-    );
-
-    const suspiciousEvents = buildSuspiciousEventsForLog(log, previousLogs);
-    const loginEvent = buildLoginEvent(log, suspiciousEvents);
-
-    allEvents.push(loginEvent);
-    allEvents.push(...suspiciousEvents);
-  }
+  const loginEvents = safeLogs.map((log) => ({
+    id: `log-${log.id}`,
+    type: "LOGIN_SUCCESS",
+    title: "Inicio de sesión correcto",
+    email: log.email,
+    role: log.role,
+    ip: log.ip,
+    browser: log.browser,
+    os: log.os,
+    device: log.device,
+    country: log.country || "Sin ubicación",
+    city: log.city,
+    latitude: log.latitude,
+    longitude: log.longitude,
+    risk: hasValue(log.country) ? "LOW" : "MEDIUM",
+    created_at: log.created_at,
+  }));
 
   const attemptEvents = safeAttempts.map((attempt) => {
     const risk = getAttemptRisk(attempt, failedByIp);
@@ -314,23 +212,33 @@ export async function GET(req: NextRequest) {
     };
   });
 
-  const events = [...allEvents, ...attemptEvents]
+  const securityEvents = safeSmartEvents.map((event) => ({
+    id: `security-${event.id}`,
+    type: event.type,
+    title: event.title,
+    email: event.email,
+    role: null,
+    ip: event.ip,
+    browser: event.browser,
+    os: event.os,
+    device: event.device,
+    country: event.country || "Sin ubicación",
+    city: event.city,
+    latitude: null,
+    longitude: null,
+    reason: event.reason,
+    risk: normalizeRisk(event.risk),
+    created_at: event.created_at,
+  }));
+
+  const events = [...securityEvents, ...attemptEvents, ...loginEvents]
     .sort(
       (a, b) =>
         new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     )
     .slice(0, 150);
 
-  const highEvents = events.filter((event) => event.risk === "HIGH").length;
-  const mediumEvents = events.filter((event) => event.risk === "MEDIUM").length;
-
-  let globalRisk: Risk = "LOW";
-
-  if (highEvents > 0 || suspiciousIps.some((ip) => ip.risk === "HIGH")) {
-    globalRisk = "HIGH";
-  } else if (mediumEvents > 0 || suspiciousIps.length > 0) {
-    globalRisk = "MEDIUM";
-  }
+  const globalRisk = calculateGlobalRisk(events, suspiciousIps);
 
   return NextResponse.json({
     summary: {
