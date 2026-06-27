@@ -47,16 +47,30 @@ type SecurityEvent = {
   type: string;
   title: string;
   email: string | null;
-  ip: string | null;
+  ip: string |null;
+
   browser: string | null;
   os: string | null;
   device: string | null;
+
   country: string | null;
   city: string | null;
+
+  isp: string | null;
+  asn: string | null;
+
+  is_vpn: boolean;
+  is_proxy: boolean;
+  is_tor: boolean;
+
+  connection_type: string | null;
+
   reason?: string | null;
+
   risk: string;
+
   created_at: string;
-};
+};  
 
 type SecurityResponse = {
   summary: {
@@ -304,47 +318,104 @@ export default function SecurityPage() {
 
             <div className="overflow-x-auto">
               <table className="w-full min-w-[1100px]">
-                <thead className="bg-[#0b1623]">
-                  <tr>
-                    <th className="text-left p-4">Fecha</th>
-                    <th className="text-left p-4">Evento</th>
-                    <th className="text-left p-4">Email</th>
-                    <th className="text-left p-4">IP</th>
-                    <th className="text-left p-4">Ubicación</th>
-                    <th className="text-left p-4">Dispositivo</th>
-                    <th className="text-left p-4">Riesgo</th>
-                  </tr>
-                </thead>
 
-                <tbody>
-                  {events.slice(0, 20).map((event) => (
-                    <tr key={event.id} className="border-t border-white/10 hover:bg-white/5">
-                      <td className="p-4 text-white/70">{formatDate(event.created_at)}</td>
-                      <td className="p-4 font-black">{event.title}</td>
-                      <td className="p-4">{event.email ?? "Sin email"}</td>
-                      <td className="p-4 font-mono text-sm">{event.ip ?? "Sin IP"}</td>
-                      <td className="p-4 text-white/70">
-                        {[event.city, event.country].filter(Boolean).join(", ") || "Sin ubicación"}
-                      </td>
-                      <td className="p-4 text-white/70">
-                        {[event.device, event.os, event.browser].filter(Boolean).join(" · ") || "-"}
-                      </td>
-                      <td className="p-4">
-                        <span className={`text-xs font-black rounded-full border px-3 py-1 ${riskStyle(event.risk)}`}>
-                          {event.risk}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
+<thead className="bg-[#0b1623]">
+  <tr>
+    <th className="text-left p-4">Fecha</th>
+    <th className="text-left p-4">Evento</th>
+    <th className="text-left p-4">Email</th>
+    <th className="text-left p-4">IP</th>
+    <th className="text-left p-4">Ubicación</th>
+    <th className="text-left p-4">Dispositivo</th>
+    <th className="text-left p-4">Proveedor</th>
+    <th className="text-left p-4">Conexión</th>
+    <th className="text-left p-4">VPN</th>
+    <th className="text-left p-4">Riesgo</th>
+  </tr>
+</thead>
 
-                  {events.length === 0 && (
-                    <tr>
-                      <td colSpan={7} className="text-center text-white/40 py-12">
-                        No existen eventos todavía.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
+
+
+
+            <tbody>
+  {events.slice(0, 20).map((event) => (
+    <tr
+      key={event.id}
+      className="border-t border-white/10 hover:bg-white/5"
+    >
+      <td className="p-4 text-white/70">
+        {formatDate(event.created_at)}
+      </td>
+
+      <td className="p-4 font-black">
+        {event.title}
+      </td>
+
+      <td className="p-4">
+        {event.email ?? "Sin email"}
+      </td>
+
+      <td className="p-4 font-mono text-sm">
+        {event.ip ?? "Sin IP"}
+      </td>
+
+      <td className="p-4 text-white/70">
+        {[event.city, event.country].filter(Boolean).join(", ") || "Sin ubicación"}
+      </td>
+
+      <td className="p-4 text-white/70">
+        {[event.device, event.os, event.browser].filter(Boolean).join(" · ") || "-"}
+      </td>
+
+      <td className="p-4">
+        {event.isp ?? "-"}
+      </td>
+
+      <td className="p-4">
+        {event.connection_type ?? "-"}
+      </td>
+
+      <td className="p-4">
+        {event.is_tor ? (
+          <span className="text-red-500 font-black">TOR</span>
+        ) : event.is_vpn ? (
+          <span className="text-yellow-400 font-black">VPN</span>
+        ) : event.is_proxy ? (
+          <span className="text-orange-400 font-black">PROXY</span>
+        ) : (
+          <span className="text-green-400">Normal</span>
+        )}
+      </td>
+
+      <td className="p-4">
+        <span
+          className={`text-xs font-black rounded-full border px-3 py-1 ${riskStyle(
+            event.risk
+          )}`}
+        >
+          {event.risk}
+        </span>
+      </td>
+    </tr>
+  ))}
+
+  {events.length === 0 && (
+    <tr>
+      <td colSpan={10} className="text-center text-white/40 py-12">
+        No existen eventos todavía.
+      </td>
+    </tr>
+  )}
+</tbody>
+
+
+
+
+
+
+
+
+
               </table>
             </div>
           </section>

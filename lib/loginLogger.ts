@@ -12,6 +12,12 @@ type GeoData = {
   city: string | null;
   latitude: number | null;
   longitude: number | null;
+  isp: string | null;
+  asn: string | null;
+  is_vpn: boolean;
+  is_proxy: boolean;
+  is_tor: boolean;
+  connection_type: string | null;
 };
 
 type PreviousLogin = {
@@ -91,6 +97,35 @@ async function createSmartSecurityEvents(params: {
 
   const history = (previousLogs ?? []) as PreviousLogin[];
 
+  if (geo.is_tor || geo.is_vpn || geo.is_proxy) {
+    await createSecurityEvent({
+      userId,
+      email,
+      type: geo.is_tor ? "TOR_DETECTED" : geo.is_vpn ? "VPN_DETECTED" : "PROXY_DETECTED",
+      title: geo.is_tor
+        ? "Tor detectado"
+        : geo.is_vpn
+        ? "VPN detectada"
+        : "Proxy detectado",
+      risk: geo.is_tor ? "HIGH" : "MEDIUM",
+      ip,
+      country: geo.country,
+      city: geo.city,
+      browser,
+      os,
+      device,
+      reason: "El usuario inició sesión desde una conexión anónima o intermediada.",
+      metadata: {
+        isp: geo.isp,
+        asn: geo.asn,
+        connection_type: geo.connection_type,
+        is_vpn: geo.is_vpn,
+        is_proxy: geo.is_proxy,
+        is_tor: geo.is_tor,
+      },
+    });
+  }
+
   if (history.length === 0) {
     await createSecurityEvent({
       userId,
@@ -105,23 +140,21 @@ async function createSmartSecurityEvents(params: {
       os,
       device,
       reason: "Primer acceso registrado para este usuario.",
-      metadata: {},
+      metadata: {
+        isp: geo.isp,
+        asn: geo.asn,
+        connection_type: geo.connection_type,
+      },
     });
 
     return;
   }
 
   const previousIps = new Set(history.map((item) => item.ip).filter(hasValue));
-  const previousCountries = new Set(
-    history.map((item) => item.country).filter(hasValue)
-  );
+  const previousCountries = new Set(history.map((item) => item.country).filter(hasValue));
   const previousCities = new Set(history.map((item) => item.city).filter(hasValue));
-  const previousBrowsers = new Set(
-    history.map((item) => item.browser).filter(hasValue)
-  );
-  const previousDevices = new Set(
-    history.map((item) => item.device).filter(hasValue)
-  );
+  const previousBrowsers = new Set(history.map((item) => item.browser).filter(hasValue));
+  const previousDevices = new Set(history.map((item) => item.device).filter(hasValue));
 
   if (hasValue(ip) && previousIps.size > 0 && !previousIps.has(ip)) {
     await createSecurityEvent({
@@ -137,17 +170,11 @@ async function createSmartSecurityEvents(params: {
       os,
       device,
       reason: "El usuario inició sesión desde una IP no vista anteriormente.",
-      metadata: {
-        previousIps: Array.from(previousIps).slice(0, 5),
-      },
+      metadata: { previousIps: Array.from(previousIps).slice(0, 5) },
     });
   }
 
-  if (
-    hasValue(geo.country) &&
-    previousCountries.size > 0 &&
-    !previousCountries.has(geo.country)
-  ) {
+  if (hasValue(geo.country) && previousCountries.size > 0 && !previousCountries.has(geo.country)) {
     await createSecurityEvent({
       userId,
       email,
@@ -161,9 +188,7 @@ async function createSmartSecurityEvents(params: {
       os,
       device,
       reason: "El usuario inició sesión desde un país no visto anteriormente.",
-      metadata: {
-        previousCountries: Array.from(previousCountries),
-      },
+      metadata: { previousCountries: Array.from(previousCountries) },
     });
   }
 
@@ -181,17 +206,11 @@ async function createSmartSecurityEvents(params: {
       os,
       device,
       reason: "El usuario inició sesión desde una ciudad no vista anteriormente.",
-      metadata: {
-        previousCities: Array.from(previousCities).slice(0, 10),
-      },
+      metadata: { previousCities: Array.from(previousCities).slice(0, 10) },
     });
   }
 
-  if (
-    hasValue(browser) &&
-    previousBrowsers.size > 0 &&
-    !previousBrowsers.has(browser)
-  ) {
+  if (hasValue(browser) && previousBrowsers.size > 0 && !previousBrowsers.has(browser)) {
     await createSecurityEvent({
       userId,
       email,
@@ -205,9 +224,7 @@ async function createSmartSecurityEvents(params: {
       os,
       device,
       reason: "El usuario inició sesión desde un navegador no visto anteriormente.",
-      metadata: {
-        previousBrowsers: Array.from(previousBrowsers),
-      },
+      metadata: { previousBrowsers: Array.from(previousBrowsers) },
     });
   }
 
@@ -225,9 +242,7 @@ async function createSmartSecurityEvents(params: {
       os,
       device,
       reason: "El usuario inició sesión desde un dispositivo no visto anteriormente.",
-      metadata: {
-        previousDevices: Array.from(previousDevices),
-      },
+      metadata: { previousDevices: Array.from(previousDevices) },
     });
   }
 }
@@ -302,6 +317,12 @@ export async function saveLogin(
       city: geo.city,
       latitude: geo.latitude,
       longitude: geo.longitude,
+      isp: geo.isp,
+      asn: geo.asn,
+      is_vpn: geo.is_vpn,
+      is_proxy: geo.is_proxy,
+      is_tor: geo.is_tor,
+      connection_type: geo.connection_type,
     });
 
     if (error) {

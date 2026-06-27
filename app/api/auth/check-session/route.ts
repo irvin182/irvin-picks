@@ -12,12 +12,14 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ valid: false }, { status: 401 });
   }
 
-  if ((token as any).role === "ADMIN") {
+  const role = String((token as any).role ?? "").toUpperCase();
+
+  if (role === "ADMIN") {
     return NextResponse.json({ valid: true });
   }
 
-  const userId = (token as any).id;
-  const sessionId = (token as any).sessionId;
+  const userId = String((token as any).id ?? "");
+  const sessionId = String((token as any).sessionId ?? "");
 
   if (!userId || !sessionId) {
     return NextResponse.json({ valid: false }, { status: 401 });
@@ -25,7 +27,7 @@ export async function GET(req: NextRequest) {
 
   const { data: user, error } = await supabaseAdmin
     .from("app_users")
-    .select("active,blocked,expires_at,active_session_id,email")
+    .select("active,blocked,expires_at,active_session_id")
     .eq("id", userId)
     .maybeSingle();
 
@@ -34,7 +36,10 @@ export async function GET(req: NextRequest) {
   }
 
   if (user.active === false || user.blocked === true) {
-    return NextResponse.json({ valid: false }, { status: 401 });
+    return NextResponse.json(
+      { valid: false, reason: "account_disabled" },
+      { status: 401 }
+    );
   }
 
   if (user.expires_at && new Date(user.expires_at).getTime() < Date.now()) {

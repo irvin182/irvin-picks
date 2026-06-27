@@ -18,6 +18,12 @@ type LoginLog = {
   city: string | null;
   latitude: number | null;
   longitude: number | null;
+  isp: string | null;
+  asn: string | null;
+  is_vpn: boolean | null;
+  is_proxy: boolean | null;
+  is_tor: boolean | null;
+  connection_type: string | null;
   created_at: string;
 };
 
@@ -86,17 +92,19 @@ function normalizeRisk(value: string | null | undefined): Risk {
   return "LOW";
 }
 
+function getLogRisk(log: LoginLog): Risk {
+  if (log.is_tor) return "HIGH";
+  if (log.is_vpn || log.is_proxy) return "MEDIUM";
+  if (!hasValue(log.country)) return "MEDIUM";
+  return "LOW";
+}
+
 function calculateGlobalRisk(events: any[], suspiciousIps: any[]): Risk {
   const hasHigh = events.some((event) => event.risk === "HIGH");
   const hasMedium = events.some((event) => event.risk === "MEDIUM");
 
-  if (hasHigh || suspiciousIps.some((ip) => ip.risk === "HIGH")) {
-    return "HIGH";
-  }
-
-  if (hasMedium || suspiciousIps.length > 0) {
-    return "MEDIUM";
-  }
+  if (hasHigh || suspiciousIps.some((ip) => ip.risk === "HIGH")) return "HIGH";
+  if (hasMedium || suspiciousIps.length > 0) return "MEDIUM";
 
   return "LOW";
 }
@@ -111,7 +119,7 @@ export async function GET(req: NextRequest) {
   const { data: logs, error: logsError } = await supabaseAdmin
     .from("login_logs")
     .select(
-      "id,user_id,email,role,ip,user_agent,browser,os,device,country,city,latitude,longitude,created_at"
+      "id,user_id,email,role,ip,user_agent,browser,os,device,country,city,latitude,longitude,isp,asn,is_vpn,is_proxy,is_tor,connection_type,created_at"
     )
     .order("created_at", { ascending: false })
     .limit(500);
@@ -143,9 +151,7 @@ export async function GET(req: NextRequest) {
 
   const safeLogs = (logs ?? []) as LoginLog[];
   const safeAttempts = attemptsError ? [] : ((attempts ?? []) as LoginAttempt[]);
-  const safeSmartEvents = smartEventsError
-    ? []
-    : ((smartEvents ?? []) as SecurityEvent[]);
+  const safeSmartEvents = smartEventsError ? [] : ((smartEvents ?? []) as SecurityEvent[]);
 
   const failed = safeAttempts.filter((a) => a.success === false);
   const success = safeAttempts.filter((a) => a.success === true);
@@ -185,7 +191,13 @@ export async function GET(req: NextRequest) {
     city: log.city,
     latitude: log.latitude,
     longitude: log.longitude,
-    risk: hasValue(log.country) ? "LOW" : "MEDIUM",
+    isp: log.isp,
+    asn: log.asn,
+    is_vpn: Boolean(log.is_vpn),
+    is_proxy: Boolean(log.is_proxy),
+    is_tor: Boolean(log.is_tor),
+    connection_type: log.connection_type,
+    risk: getLogRisk(log),
     created_at: log.created_at,
   }));
 
@@ -206,6 +218,12 @@ export async function GET(req: NextRequest) {
       city: null,
       latitude: null,
       longitude: null,
+      isp: null,
+      asn: null,
+      is_vpn: false,
+      is_proxy: false,
+      is_tor: false,
+      connection_type: null,
       reason: attempt.reason,
       risk,
       created_at: attempt.created_at,
@@ -226,6 +244,12 @@ export async function GET(req: NextRequest) {
     city: event.city,
     latitude: null,
     longitude: null,
+    isp: null,
+    asn: null,
+    is_vpn: event.type === "VPN_DETECTED",
+    is_proxy: event.type === "PROXY_DETECTED",
+    is_tor: event.type === "TOR_DETECTED",
+    connection_type: null,
     reason: event.reason,
     risk: normalizeRisk(event.risk),
     created_at: event.created_at,
