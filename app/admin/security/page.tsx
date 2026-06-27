@@ -32,13 +32,26 @@ type LoginLog = {
   id: string;
   email: string | null;
   ip: string | null;
+
   browser: string | null;
   os: string | null;
   device: string | null;
+
   country: string | null;
   city: string | null;
+
   latitude: number | null;
   longitude: number | null;
+
+  isp: string | null;
+  asn: string | null;
+
+  is_vpn: boolean;
+  is_proxy: boolean;
+  is_tor: boolean;
+
+  risk: "LOW" | "MEDIUM" | "HIGH" | null;
+
   created_at: string;
 };
 

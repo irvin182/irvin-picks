@@ -4,6 +4,7 @@ import { detectOS, detectDevice } from "@/lib/deviceParser";
 import { getGeoData } from "@/lib/geoIp";
 
 const DUPLICATE_WINDOW_MINUTES = 30;
+const IMPOSSIBLE_TRAVEL_SPEED_KMH = 950;
 
 type Risk = "LOW" | "MEDIUM" | "HIGH";
 
@@ -28,12 +29,53 @@ type PreviousLogin = {
   device: string | null;
   country: string | null;
   city: string | null;
+  latitude: number | null;
+  longitude: number | null;
   created_at: string;
 };
 
 function hasValue(value: string | null | undefined) {
   const clean = String(value ?? "").trim();
   return clean.length > 0 && clean !== "Desconocida" && clean !== "Sin ubicación";
+}
+
+function getHeader(req: any, name: string) {
+  const headers = req?.headers;
+
+  if (!headers) return null;
+
+  if (typeof headers.get === "function") {
+    return headers.get(name);
+  }
+
+  const direct = headers[name];
+  const lower = headers[name.toLowerCase()];
+
+  const value = direct ?? lower;
+
+  if (Array.isArray(value)) {
+    return value[0] ?? null;
+  }
+
+  return value ?? null;
+}
+
+function toRadians(value: number) {
+  return (value * Math.PI) / 180;
+}
+
+function distanceKm(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const earthRadiusKm = 6371;
+  const dLat = toRadians(lat2 - lat1);
+  const dLon = toRadians(lon2 - lon1);
+
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRadians(lat1)) *
+      Math.cos(toRadians(lat2)) *
+      Math.sin(dLon / 2) ** 2;
+
+  return earthRadiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
 async function createSecurityEvent(payload: {
@@ -85,7 +127,7 @@ async function createSmartSecurityEvents(params: {
 
   const { data: previousLogs, error } = await supabaseAdmin
     .from("login_logs")
-    .select("id,ip,browser,os,device,country,city,created_at")
+    .select("id,ip,browser,os,device,country,city,latitude,longitude,created_at")
     .eq("user_id", userId)
     .order("created_at", { ascending: false })
     .limit(50);
@@ -97,11 +139,74 @@ async function createSmartSecurityEvents(params: {
 
   const history = (previousLogs ?? []) as PreviousLogin[];
 
+  const lastGeoLogin = history.find(
+    (item) =>
+      typeof item.latitude === "number" &&
+      typeof item.longitude === "number"
+  );
+
+  if (
+    lastGeoLogin &&
+    geo.latitude !== null &&
+    geo.longitude !== null &&
+    lastGeoLogin.latitude !== null &&
+    lastGeoLogin.longitude !== null
+  ) {
+    const currentTime = Date.now();
+    const previousTime = new Date(lastGeoLogin.created_at).getTime();
+    const diffHours = Math.max((currentTime - previousTime) / 3600000, 0.01);
+
+    const km = distanceKm(
+      lastGeoLogin.latitude,
+      lastGeoLogin.longitude,
+      geo.latitude,
+      geo.longitude
+    );
+
+    const speedKmh = km / diffHours;
+
+    if (km >= 500 && speedKmh > IMPOSSIBLE_TRAVEL_SPEED_KMH) {
+      await createSecurityEvent({
+        userId,
+        email,
+        type: "IMPOSSIBLE_TRAVEL",
+        title: "Viaje imposible detectado",
+        risk: "HIGH",
+        ip,
+        country: geo.country,
+        city: geo.city,
+        browser,
+        os,
+        device,
+        reason:
+          "El usuario inició sesión desde una ubicación muy lejana en un tiempo físicamente imposible.",
+        metadata: {
+          previousIp: lastGeoLogin.ip,
+          previousCountry: lastGeoLogin.country,
+          previousCity: lastGeoLogin.city,
+          previousLatitude: lastGeoLogin.latitude,
+          previousLongitude: lastGeoLogin.longitude,
+          currentCountry: geo.country,
+          currentCity: geo.city,
+          currentLatitude: geo.latitude,
+          currentLongitude: geo.longitude,
+          distanceKm: Math.round(km),
+          diffMinutes: Math.round(diffHours * 60),
+          estimatedSpeedKmh: Math.round(speedKmh),
+        },
+      });
+    }
+  }
+
   if (geo.is_tor || geo.is_vpn || geo.is_proxy) {
     await createSecurityEvent({
       userId,
       email,
-      type: geo.is_tor ? "TOR_DETECTED" : geo.is_vpn ? "VPN_DETECTED" : "PROXY_DETECTED",
+      type: geo.is_tor
+        ? "TOR_DETECTED"
+        : geo.is_vpn
+        ? "VPN_DETECTED"
+        : "PROXY_DETECTED",
       title: geo.is_tor
         ? "Tor detectado"
         : geo.is_vpn
@@ -114,7 +219,8 @@ async function createSmartSecurityEvents(params: {
       browser,
       os,
       device,
-      reason: "El usuario inició sesión desde una conexión anónima o intermediada.",
+      reason:
+        "El usuario inició sesión desde una conexión anónima o intermediada.",
       metadata: {
         isp: geo.isp,
         asn: geo.asn,
@@ -151,10 +257,18 @@ async function createSmartSecurityEvents(params: {
   }
 
   const previousIps = new Set(history.map((item) => item.ip).filter(hasValue));
-  const previousCountries = new Set(history.map((item) => item.country).filter(hasValue));
-  const previousCities = new Set(history.map((item) => item.city).filter(hasValue));
-  const previousBrowsers = new Set(history.map((item) => item.browser).filter(hasValue));
-  const previousDevices = new Set(history.map((item) => item.device).filter(hasValue));
+  const previousCountries = new Set(
+    history.map((item) => item.country).filter(hasValue)
+  );
+  const previousCities = new Set(
+    history.map((item) => item.city).filter(hasValue)
+  );
+  const previousBrowsers = new Set(
+    history.map((item) => item.browser).filter(hasValue)
+  );
+  const previousDevices = new Set(
+    history.map((item) => item.device).filter(hasValue)
+  );
 
   if (hasValue(ip) && previousIps.size > 0 && !previousIps.has(ip)) {
     await createSecurityEvent({
@@ -174,7 +288,11 @@ async function createSmartSecurityEvents(params: {
     });
   }
 
-  if (hasValue(geo.country) && previousCountries.size > 0 && !previousCountries.has(geo.country)) {
+  if (
+    hasValue(geo.country) &&
+    previousCountries.size > 0 &&
+    !previousCountries.has(geo.country)
+  ) {
     await createSecurityEvent({
       userId,
       email,
@@ -192,7 +310,11 @@ async function createSmartSecurityEvents(params: {
     });
   }
 
-  if (hasValue(geo.city) && previousCities.size > 0 && !previousCities.has(geo.city)) {
+  if (
+    hasValue(geo.city) &&
+    previousCities.size > 0 &&
+    !previousCities.has(geo.city)
+  ) {
     await createSecurityEvent({
       userId,
       email,
@@ -210,7 +332,11 @@ async function createSmartSecurityEvents(params: {
     });
   }
 
-  if (hasValue(browser) && previousBrowsers.size > 0 && !previousBrowsers.has(browser)) {
+  if (
+    hasValue(browser) &&
+    previousBrowsers.size > 0 &&
+    !previousBrowsers.has(browser)
+  ) {
     await createSecurityEvent({
       userId,
       email,
@@ -223,12 +349,17 @@ async function createSmartSecurityEvents(params: {
       browser,
       os,
       device,
-      reason: "El usuario inició sesión desde un navegador no visto anteriormente.",
+      reason:
+        "El usuario inició sesión desde un navegador no visto anteriormente.",
       metadata: { previousBrowsers: Array.from(previousBrowsers) },
     });
   }
 
-  if (hasValue(device) && previousDevices.size > 0 && !previousDevices.has(device)) {
+  if (
+    hasValue(device) &&
+    previousDevices.size > 0 &&
+    !previousDevices.has(device)
+  ) {
     await createSecurityEvent({
       userId,
       email,
@@ -241,14 +372,15 @@ async function createSmartSecurityEvents(params: {
       browser,
       os,
       device,
-      reason: "El usuario inició sesión desde un dispositivo no visto anteriormente.",
+      reason:
+        "El usuario inició sesión desde un dispositivo no visto anteriormente.",
       metadata: { previousDevices: Array.from(previousDevices) },
     });
   }
 }
 
 export async function saveLogin(
-  req: Request,
+  req: any,
   user: {
     id: string;
     email: string;
@@ -256,18 +388,18 @@ export async function saveLogin(
   }
 ) {
   try {
-    const forwarded = req.headers.get("x-forwarded-for");
+    const forwarded = getHeader(req, "x-forwarded-for");
 
-    const ip =
-      forwarded?.split(",")[0]?.trim() ||
-      req.headers.get("x-real-ip") ||
-      "Desconocida";
+const ip =
+  forwarded?.split(",")[0]?.trim() ||
+  getHeader(req, "x-real-ip") ||
+  "Desconocida";
 
-    const userAgent = req.headers.get("user-agent") || "Desconocido";
+const userAgent = getHeader(req, "user-agent") || "Desconocido";
 
-    const browser = detectBrowser(userAgent);
-    const os = detectOS(userAgent);
-    const device = detectDevice(userAgent);
+const browser = detectBrowser(userAgent);
+const os = detectOS(userAgent);
+const device = detectDevice(userAgent);
 
     const since = new Date(
       Date.now() - DUPLICATE_WINDOW_MINUTES * 60 * 1000

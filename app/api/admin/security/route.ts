@@ -264,19 +264,25 @@ export async function GET(req: NextRequest) {
 
   const globalRisk = calculateGlobalRisk(events, suspiciousIps);
 
-  return NextResponse.json({
-    summary: {
-      risk: globalRisk,
-      attempts: safeAttempts.length,
-      success: success.length,
-      failed: failed.length,
-      suspiciousIps: suspiciousIps.length,
-      events: events.length,
-    },
-    attempts: safeAttempts,
-    logs: safeLogs,
-    events,
-    countries,
-    suspiciousIps,
-  });
+return NextResponse.json({
+  summary: {
+    risk: globalRisk,
+    attempts: safeAttempts.length,
+    success: success.length,
+    failed: failed.length,
+    suspiciousIps: suspiciousIps.length,
+    events: events.length,
+  },
+  attempts: safeAttempts,
+  logs: safeLogs.map((log) => ({
+    ...log,
+    is_vpn: Boolean(log.is_vpn),
+    is_proxy: Boolean(log.is_proxy),
+    is_tor: Boolean(log.is_tor),
+    risk: getLogRisk(log),
+  })),
+  events,
+  countries,
+  suspiciousIps,
+});
 }

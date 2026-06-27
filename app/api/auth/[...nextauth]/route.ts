@@ -8,18 +8,36 @@ if (!process.env.NEXTAUTH_SECRET) {
   throw new Error("NEXTAUTH_SECRET is not configured");
 }
 
+function getHeader(req: any, name: string) {
+  const headers = req?.headers;
+
+  if (!headers) return null;
+
+  if (typeof headers.get === "function") {
+    return headers.get(name);
+  }
+
+  const direct = headers[name];
+  const lower = headers[name.toLowerCase()];
+  const value = direct ?? lower;
+
+  if (Array.isArray(value)) return value[0] ?? null;
+
+  return value ?? null;
+}
+
 function getClientIp(req: any) {
-  const forwarded = req?.headers?.get?.("x-forwarded-for");
+  const forwarded = getHeader(req, "x-forwarded-for");
 
   return (
     forwarded?.split(",")[0]?.trim() ||
-    req?.headers?.get?.("x-real-ip") ||
+    getHeader(req, "x-real-ip") ||
     "Desconocida"
   );
 }
 
 function getUserAgent(req: any) {
-  return req?.headers?.get?.("user-agent") || "Desconocido";
+  return getHeader(req, "user-agent") || "Desconocido";
 }
 
 async function saveLoginAttempt(
@@ -64,7 +82,7 @@ const handler = NextAuth({
       async authorize(credentials, req) {
         const email = String(credentials?.email ?? "").toLowerCase().trim();
         const password = String(credentials?.password ?? "");
-console.log("🔥 GUARDANDO LOGIN ATTEMPT");
+
         if (!email || !password) {
           await saveLoginAttempt(req, {
             email: email || "Sin email",
@@ -73,54 +91,6 @@ console.log("🔥 GUARDANDO LOGIN ATTEMPT");
           });
 
           return null;
-        }
-
-        const adminEmail = process.env.ADMIN_EMAIL?.toLowerCase().trim();
-        const adminPassword = process.env.ADMIN_PASSWORD;
-        const adminPasswordHash = process.env.ADMIN_PASSWORD_HASH;
-
-        if (adminEmail && email === adminEmail) {
-          let ok = false;
-
-          if (adminPasswordHash) {
-            try {
-              ok = await bcrypt.compare(password, adminPasswordHash);
-            } catch {
-              ok = false;
-            }
-          }
-
-          if (!ok && adminPassword) {
-            ok = password === adminPassword;
-          }
-
-          if (!ok) {
-            await saveLoginAttempt(req, {
-              email,
-              success: false,
-              reason: "admin_invalid_password",
-            });
-
-            return null;
-          }
-
-          await saveLoginAttempt(req, {
-            email,
-            success: true,
-            reason: "admin_login_success",
-          });
-
-          return {
-            id: "admin",
-            name: "Irvin Admin",
-            email,
-            role: "ADMIN",
-            plan: "admin",
-            active: true,
-            blocked: false,
-            expires_at: null,
-            sessionId: crypto.randomUUID(),
-          } as any;
         }
 
         const { data: user, error } = await supabaseAdmin
@@ -204,6 +174,8 @@ console.log("🔥 GUARDANDO LOGIN ATTEMPT");
         }
 
         const sessionId = crypto.randomUUID();
+        const plan = String(user.plan ?? "").toLowerCase();
+        const role = plan === "admin" ? "ADMIN" : "USER";
 
         await supabaseAdmin
           .from("app_users")
@@ -218,20 +190,20 @@ console.log("🔥 GUARDANDO LOGIN ATTEMPT");
         await saveLoginAttempt(req, {
           email: user.email,
           success: true,
-          reason: "login_success",
+          reason: role === "ADMIN" ? "admin_login_success" : "login_success",
         });
 
         await saveLogin(req as any, {
           id: user.id,
           email: user.email,
-          role: "USER",
+          role,
         });
 
         return {
           id: user.id,
           name: user.name,
           email: user.email,
-          role: "USER",
+          role,
           plan: user.plan,
           active: user.active,
           blocked: user.blocked ?? false,
@@ -259,7 +231,11 @@ console.log("🔥 GUARDANDO LOGIN ATTEMPT");
         token.forceLogout = false;
       }
 
-      if (token.role === "USER" && token.id && token.sessionId) {
+      if (
+        (token.role === "USER" || token.role === "ADMIN") &&
+        token.id &&
+        token.sessionId
+      ) {
         const { data: dbUser } = await supabaseAdmin
           .from("app_users")
           .select("active,blocked,expires_at,active_session_id")
