@@ -193,14 +193,14 @@ export default function SecurityPage() {
   const topSuspiciousIps = useMemo(() => getTopSuspiciousIps(attempts), [attempts]);
 
   return (
-    <main className="min-h-screen bg-[#03070b] text-white p-8">
-      <div className="flex items-center justify-between mb-8">
+    <main className="min-h-screen bg-[#03070b] text-white p-4 md:p-8">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
         <div>
           <Link href="/admin" className="text-green-400 hover:text-green-300 font-bold">
             ← Volver al panel
           </Link>
 
-          <h1 className="text-5xl font-black mt-4 text-green-400">
+          <h1 className="text-3xl md:text-5xl font-black mt-4 text-green-400">
             🛡 Security Center
           </h1>
 
@@ -211,7 +211,7 @@ export default function SecurityPage() {
 
         <button
           onClick={loadSecurity}
-          className="bg-green-500 hover:bg-green-400 text-black font-black px-5 py-3 rounded-xl"
+          className="bg-green-500 hover:bg-green-400 text-black font-black px-5 py-3 rounded-xl w-full md:w-auto"
         >
           Actualizar
         </button>
@@ -330,7 +330,7 @@ export default function SecurityPage() {
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[1100px]">
+              <table className="w-full min-w-[1250px]">
 
 <thead className="bg-[#0b1623]">
   <tr>

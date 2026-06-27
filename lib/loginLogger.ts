@@ -390,16 +390,19 @@ export async function saveLogin(
   try {
     const forwarded = getHeader(req, "x-forwarded-for");
 
-const ip =
-  forwarded?.split(",")[0]?.trim() ||
-  getHeader(req, "x-real-ip") ||
-  "Desconocida";
+    const ip =
+      forwarded?.split(",")[0]?.trim() ||
+      getHeader(req, "x-real-ip") ||
+      "Desconocida";
 
-const userAgent = getHeader(req, "user-agent") || "Desconocido";
+    const userAgent = getHeader(req, "user-agent") || "Desconocido";
 
-const browser = detectBrowser(userAgent);
-const os = detectOS(userAgent);
-const device = detectDevice(userAgent);
+    const browser = detectBrowser(userAgent);
+    const os = detectOS(userAgent);
+    const device = detectDevice(userAgent);
+
+
+
 
     const since = new Date(
       Date.now() - DUPLICATE_WINDOW_MINUTES * 60 * 1000

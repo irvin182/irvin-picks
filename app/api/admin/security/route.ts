@@ -66,25 +66,6 @@ function hasValue(value: string | null | undefined) {
   return clean.length > 0 && clean !== "Sin ubicación" && clean !== "Sin IP";
 }
 
-function getAttemptRisk(attempt: LoginAttempt, failedByIp: Record<string, number>): Risk {
-  if (attempt.success === false) {
-    const count = attempt.ip ? failedByIp[attempt.ip] ?? 0 : 0;
-    if (count >= 5) return "HIGH";
-    return "MEDIUM";
-  }
-
-  return "LOW";
-}
-
-function getAttemptTitle(attempt: LoginAttempt, failedByIp: Record<string, number>) {
-  if (attempt.success) return "Intento de login correcto";
-
-  const count = attempt.ip ? failedByIp[attempt.ip] ?? 0 : 0;
-  if (count >= 5) return "Múltiples intentos fallidos desde la misma IP";
-
-  return "Intento de login fallido";
-}
-
 function normalizeRisk(value: string | null | undefined): Risk {
   const risk = String(value ?? "LOW").toUpperCase();
   if (risk === "HIGH") return "HIGH";
@@ -99,12 +80,60 @@ function getLogRisk(log: LoginLog): Risk {
   return "LOW";
 }
 
-function calculateGlobalRisk(events: any[], suspiciousIps: any[]): Risk {
-  const hasHigh = events.some((event) => event.risk === "HIGH");
-  const hasMedium = events.some((event) => event.risk === "MEDIUM");
+function attemptKey(attempt: LoginAttempt) {
+  return `${attempt.email ?? "Sin email"}::${attempt.ip ?? "Sin IP"}`;
+}
 
-  if (hasHigh || suspiciousIps.some((ip) => ip.risk === "HIGH")) return "HIGH";
-  if (hasMedium || suspiciousIps.length > 0) return "MEDIUM";
+function buildActiveFailedAttempts(attempts: LoginAttempt[]) {
+  const lastSuccessByKey: Record<string, number> = {};
+
+  for (const attempt of attempts) {
+    if (attempt.success) {
+      const key = attemptKey(attempt);
+      const time = new Date(attempt.created_at).getTime();
+      lastSuccessByKey[key] = Math.max(lastSuccessByKey[key] ?? 0, time);
+    }
+  }
+
+  return attempts.filter((attempt) => {
+    if (attempt.success) return false;
+
+    const key = attemptKey(attempt);
+    const failTime = new Date(attempt.created_at).getTime();
+    const lastSuccessTime = lastSuccessByKey[key] ?? 0;
+
+    return failTime > lastSuccessTime;
+  });
+}
+
+function getAttemptRisk(attempt: LoginAttempt, failedByIp: Record<string, number>): Risk {
+  if (attempt.success) return "LOW";
+
+  const count = attempt.ip ? failedByIp[attempt.ip] ?? 0 : 0;
+
+  if (count >= 10) return "HIGH";
+  if (count >= 5) return "MEDIUM";
+
+  return "LOW";
+}
+
+function getAttemptTitle(attempt: LoginAttempt, failedByIp: Record<string, number>) {
+  if (attempt.success) return "Intento de login correcto";
+
+  const count = attempt.ip ? failedByIp[attempt.ip] ?? 0 : 0;
+
+  if (count >= 10) return "Ataque de fuerza bruta detectado";
+  if (count >= 5) return "Múltiples intentos fallidos desde la misma IP";
+
+  return "Intento de login fallido";
+}
+
+function calculateGlobalRisk(events: any[], suspiciousIps: any[]): Risk {
+  const recentHigh = events.some((event) => event.risk === "HIGH");
+  const recentMedium = events.some((event) => event.risk === "MEDIUM");
+
+  if (recentHigh || suspiciousIps.some((ip) => ip.risk === "HIGH")) return "HIGH";
+  if (recentMedium || suspiciousIps.length > 0) return "MEDIUM";
 
   return "LOW";
 }
@@ -126,10 +155,7 @@ export async function GET(req: NextRequest) {
 
   if (logsError) {
     console.error("Error cargando login_logs:", logsError);
-    return NextResponse.json(
-      { error: "Error cargando seguridad" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Error cargando seguridad" }, { status: 500 });
   }
 
   const { data: attempts, error: attemptsError } = await supabaseAdmin
@@ -142,6 +168,7 @@ export async function GET(req: NextRequest) {
   const { data: smartEvents, error: smartEventsError } = await supabaseAdmin
     .from("security_events")
     .select("id,email,type,title,risk,ip,country,city,browser,os,device,reason,created_at")
+    .gte("created_at", since24h)
     .order("created_at", { ascending: false })
     .limit(500);
 
@@ -153,10 +180,10 @@ export async function GET(req: NextRequest) {
   const safeAttempts = attemptsError ? [] : ((attempts ?? []) as LoginAttempt[]);
   const safeSmartEvents = smartEventsError ? [] : ((smartEvents ?? []) as SecurityEvent[]);
 
-  const failed = safeAttempts.filter((a) => a.success === false);
+  const activeFailed = buildActiveFailedAttempts(safeAttempts);
   const success = safeAttempts.filter((a) => a.success === true);
 
-  const failedByIp = failed.reduce((acc: Record<string, number>, attempt) => {
+  const failedByIp = activeFailed.reduce((acc: Record<string, number>, attempt) => {
     const ip = attempt.ip || "Sin IP";
     acc[ip] = (acc[ip] ?? 0) + 1;
     return acc;
@@ -166,7 +193,7 @@ export async function GET(req: NextRequest) {
     .map(([ip, count]) => ({
       ip,
       count,
-      risk: count >= 5 ? "HIGH" : count >= 2 ? "MEDIUM" : "LOW",
+      risk: count >= 10 ? "HIGH" : count >= 5 ? "MEDIUM" : "LOW",
     }))
     .filter((item) => item.risk !== "LOW")
     .sort((a, b) => b.count - a.count);
@@ -256,33 +283,30 @@ export async function GET(req: NextRequest) {
   }));
 
   const events = [...securityEvents, ...attemptEvents, ...loginEvents]
-    .sort(
-      (a, b) =>
-        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-    )
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
     .slice(0, 150);
 
   const globalRisk = calculateGlobalRisk(events, suspiciousIps);
 
-return NextResponse.json({
-  summary: {
-    risk: globalRisk,
-    attempts: safeAttempts.length,
-    success: success.length,
-    failed: failed.length,
-    suspiciousIps: suspiciousIps.length,
-    events: events.length,
-  },
-  attempts: safeAttempts,
-  logs: safeLogs.map((log) => ({
-    ...log,
-    is_vpn: Boolean(log.is_vpn),
-    is_proxy: Boolean(log.is_proxy),
-    is_tor: Boolean(log.is_tor),
-    risk: getLogRisk(log),
-  })),
-  events,
-  countries,
-  suspiciousIps,
-});
+  return NextResponse.json({
+    summary: {
+      risk: globalRisk,
+      attempts: safeAttempts.length,
+      success: success.length,
+      failed: activeFailed.length,
+      suspiciousIps: suspiciousIps.length,
+      events: events.length,
+    },
+    attempts: safeAttempts,
+    logs: safeLogs.map((log) => ({
+      ...log,
+      is_vpn: Boolean(log.is_vpn),
+      is_proxy: Boolean(log.is_proxy),
+      is_tor: Boolean(log.is_tor),
+      risk: getLogRisk(log),
+    })),
+    events,
+    countries,
+    suspiciousIps,
+  });
 }
