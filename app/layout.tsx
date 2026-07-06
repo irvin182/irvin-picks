@@ -1,24 +1,55 @@
 // app/layout.tsx
 import type { Metadata } from "next";
 import "./globals.css";
+import ActivityTracker from "@/components/ActivityTracker";
 
 export const metadata: Metadata = {
-  title: "Irvin Analytics",
-  description: "Predicciones y análisis — Irvin Analytics",
+  metadataBase: new URL("https://irvinanalytics.com"),
+  title: "Irvin Analytics | Predicciones deportivas con IA",
+  description:
+    "Plataforma privada de análisis deportivo con inteligencia artificial. Estadísticas en vivo, probabilidades avanzadas, momentum y reportes premium.",
+
   manifest: "/manifest.json",
+
   icons: {
-    icon: [
-      { url: "/favicon.ico" },
-      { url: "/logo-irvin.png", type: "image/png" }
+    icon: "/icon.png",
+    apple: "/icon.png",
+  },
+
+  openGraph: {
+    title: "Irvin Analytics",
+    description:
+      "Predicciones deportivas, estadísticas en vivo y análisis con inteligencia artificial.",
+    url: "https://irvinanalytics.com",
+    siteName: "Irvin Analytics",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "Irvin Analytics - Análisis deportivo con IA",
+      },
     ],
-    apple: "/apple-touch-icon.png",
+    locale: "es_ES",
+    type: "website",
+  },
+
+  twitter: {
+    card: "summary_large_image",
+    title: "Irvin Analytics",
+    description:
+      "Predicciones deportivas, estadísticas en vivo y análisis con inteligencia artificial.",
+    images: ["/og-image.png"],
   },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="es">
-      <body>{children}</body>
+     <body>
+  <ActivityTracker />
+  {children}
+</body>
     </html>
   );
 }
