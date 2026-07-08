@@ -66,6 +66,8 @@ export const config = {
     "/dashboard/:path*",
     "/probador/:path*",
     "/live/:path*",
+    "/live-tv/:path*",
     "/reports/:path*",
+    "/command-center/:path*",
   ],
 };
