@@ -65,14 +65,6 @@ function getBrowser(userAgent: string | null) {
   return "Navegador";
 }
 
-function planLabel(plan: string) {
-  const clean = String(plan ?? "").toLowerCase();
-  if (clean === "admin") return "ADMIN";
-  if (clean === "vip") return "VIP";
-  if (clean === "premium") return "PREMIUM";
-  return "BETA";
-}
-
 export default function AdminPage() {
   const [session, setSession] = useState<any>(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -87,7 +79,6 @@ export default function AdminPage() {
   const [expiresAt, setExpiresAt] = useState("");
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     async function checkAuth() {
@@ -404,55 +395,7 @@ Nueva contraseña: ${newPassword}`
   }
 
   return (
-    <main className="min-h-screen bg-[#03070b] text-white">
-      <div className="lg:hidden sticky top-0 z-50 border-b border-white/10 bg-[#07111c]/95 backdrop-blur px-4 py-3">
-        <div className="flex items-center justify-between">
-          <button
-            onClick={() => setMobileMenuOpen((value) => !value)}
-            className="rounded-xl bg-white/10 border border-white/10 px-4 py-3 font-black"
-          >
-            ☰
-          </button>
-
-          <div className="text-center">
-            <div className="text-xl font-black text-green-400">IRVIN</div>
-            <div className="text-[10px] tracking-[0.35em] text-green-400">
-              ANALYTICS
-            </div>
-          </div>
-
-          <button
-            onClick={refreshAll}
-            className="rounded-xl bg-green-500 px-4 py-3 text-sm font-black text-black"
-          >
-            ↻
-          </button>
-        </div>
-
-        {mobileMenuOpen && (
-          <div className="mt-3 grid gap-2 rounded-2xl border border-white/10 bg-[#0b1623] p-3 text-sm">
-            <div className="rounded-xl bg-green-500 px-4 py-3 font-black text-black">
-              Usuarios
-            </div>
-            <Link
-              href="/admin/security"
-              className="rounded-xl px-4 py-3 text-white/70 hover:bg-white/10"
-            >
-              🛡 Seguridad
-            </Link>
-            <div className="rounded-xl px-4 py-3 text-white/40">Licencias</div>
-            <div className="rounded-xl px-4 py-3 text-white/40">Pagos</div>
-            <div className="rounded-xl px-4 py-3 text-white/40">Ajustes</div>
-            <button
-              onClick={() => signOut({ callbackUrl: "/login" })}
-              className="rounded-xl bg-red-500/20 px-4 py-3 text-left font-bold text-red-300"
-            >
-              Cerrar sesión
-            </button>
-          </div>
-        )}
-      </div>
-
+    <main className="min-h-screen bg-[#03070b] text-white overflow-x-hidden">
       <div className="lg:flex">
         <aside className="hidden lg:block w-72 min-h-screen border-r border-white/10 bg-[#07111c] p-6">
           <h1 className="text-3xl font-black text-green-400">IRVIN</h1>
@@ -465,23 +408,90 @@ Nueva contraseña: ${newPassword}`
               Usuarios
             </div>
 
-            <Link
-              href="/admin/security"
-              className="block text-white/50 px-4 py-3 rounded-xl hover:bg-white/10"
-            >
-              🛡 Seguridad
-            </Link>
 
-            <div className="text-white/50 px-4 py-3">Licencias</div>
+
+
+          <Link
+  href="/admin/security"
+  className="block text-white/50 px-4 py-3 rounded-xl hover:bg-white/10"
+>
+  🛡 Seguridad
+</Link>
+
+<Link
+  href="/live-tv"
+  className="block text-green-400 px-4 py-3 rounded-xl hover:bg-green-500/10 font-bold"
+>
+  🤖 IA LIVE
+</Link>
+
+<Link
+  href="/dashboard"
+  className="block text-blue-300 px-4 py-3 rounded-xl hover:bg-blue-500/10 font-bold"
+>
+  📊 Dashboard
+</Link>
+
+<div className="text-white/50 px-4 py-3">Licencias</div>
+
+
+
+
+
             <div className="text-white/50 px-4 py-3">Pagos</div>
             <div className="text-white/50 px-4 py-3">Ajustes</div>
           </nav>
         </aside>
 
-        <section className="flex-1 p-4 md:p-6 lg:p-8">
-          <div className="flex flex-col gap-5 mb-8 xl:flex-row xl:items-center xl:justify-between">
+        <section className="w-full flex-1 p-4 md:p-6 lg:p-8 overflow-x-hidden">
+          <div className="lg:hidden mb-6 rounded-3xl border border-white/10 bg-[#07111c] p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h1 className="text-2xl font-black text-green-400">IRVIN</h1>
+                <p className="text-[10px] tracking-[0.35em] text-green-400">
+                  ANALYTICS
+                </p>
+              </div>
+
+              <button
+                onClick={() => signOut({ callbackUrl: "/login" })}
+                className="rounded-2xl bg-red-500/20 px-4 py-3 text-sm font-black text-red-300 border border-red-500/30"
+              >
+                Salir
+              </button>
+            </div>
+
+         <div className="mt-4 grid grid-cols-2 gap-3 text-center text-sm">
+  <div className="rounded-2xl bg-green-500 text-black font-black px-4 py-3">
+    👥 Usuarios
+  </div>
+
+  <Link
+    href="/admin/security"
+    className="rounded-2xl bg-white/10 text-white/80 font-bold px-4 py-3 border border-white/10 hover:bg-white/15 transition"
+  >
+    🛡 Seguridad
+  </Link>
+
+  <Link
+    href="/live-tv"
+    className="rounded-2xl bg-green-500/15 text-green-400 font-black px-4 py-3 border border-green-500/30 hover:bg-green-500 hover:text-black transition"
+  >
+    🤖 IA LIVE
+  </Link>
+
+  <Link
+    href="/dashboard"
+    className="rounded-2xl bg-blue-500/15 text-blue-300 font-black px-4 py-3 border border-blue-500/30 hover:bg-blue-500 hover:text-white transition"
+  >
+    📊 Dashboard
+  </Link>
+</div>
+          </div>
+
+          <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-5 mb-8">
             <div>
-              <h2 className="text-3xl md:text-4xl font-black">
+              <h2 className="text-3xl md:text-4xl font-black leading-tight">
                 Panel de administración
               </h2>
               <p className="text-white/50">
@@ -489,11 +499,11 @@ Nueva contraseña: ${newPassword}`
               </p>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 sm:flex sm:flex-wrap sm:items-center">
+            <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-3">
               <Link
                 href="/live-tv"
                 target="_blank"
-                className="bg-green-500 text-black rounded-2xl sm:rounded-full px-4 py-3 sm:py-2 text-center font-black hover:bg-green-400"
+                className="bg-green-500 text-black rounded-2xl sm:rounded-full px-4 py-3 sm:py-2 font-black hover:bg-green-400 text-center"
               >
                 📺 Live TV
               </Link>
@@ -505,7 +515,7 @@ Nueva contraseña: ${newPassword}`
                 Actualizar
               </button>
 
-              <div className="bg-green-500/10 text-green-400 border border-green-500/30 rounded-2xl sm:rounded-full px-4 py-3 sm:py-2 text-center font-bold">
+              <div className="bg-green-500/10 text-green-400 border border-green-500/30 rounded-2xl sm:rounded-full px-4 py-3 sm:py-2 font-bold text-center">
                 ADMIN ACTIVO
               </div>
 
@@ -518,7 +528,7 @@ Nueva contraseña: ${newPassword}`
             </div>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-3 2xl:grid-cols-6 gap-3 md:gap-4 mb-8">
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4 mb-8">
             <Card title="Usuarios" value={stats.total} />
             <Card title="Activos" value={stats.activos} />
             <Card title="Online" value={stats.online} />
@@ -527,10 +537,10 @@ Nueva contraseña: ${newPassword}`
             <Card title="Bloqueados" value={stats.bloqueados} />
           </div>
 
-          <div className="grid grid-cols-1 2xl:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
             <form
               onSubmit={createUser}
-              className="bg-[#07111c] border border-white/10 rounded-3xl p-4 md:p-6 space-y-4"
+              className="bg-[#07111c] border border-white/10 rounded-3xl p-5 md:p-6 space-y-4"
             >
               <h3 className="text-xl font-black">Crear usuario</h3>
 
@@ -550,7 +560,7 @@ Nueva contraseña: ${newPassword}`
 
               <div className="flex gap-2">
                 <input
-                  className="w-full bg-white/10 rounded-xl px-4 py-3 outline-none focus:border-green-400 border border-white/10"
+                  className="min-w-0 w-full bg-white/10 rounded-xl px-4 py-3 outline-none focus:border-green-400 border border-white/10"
                   placeholder="Contraseña"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -559,7 +569,7 @@ Nueva contraseña: ${newPassword}`
                 <button
                   type="button"
                   onClick={() => setPassword(generatePassword())}
-                  className="bg-yellow-500/20 text-yellow-300 rounded-xl px-4 font-black"
+                  className="shrink-0 bg-yellow-500/20 text-yellow-300 rounded-xl px-4 font-black"
                 >
                   🎲
                 </button>
@@ -590,8 +600,8 @@ Nueva contraseña: ${newPassword}`
               </button>
             </form>
 
-            <div className="2xl:col-span-2 bg-[#07111c] border border-white/10 rounded-3xl p-4 md:p-6">
-              <div className="flex flex-col gap-4 md:flex-row md:justify-between md:items-center mb-5">
+            <div className="xl:col-span-2 bg-[#07111c] border border-white/10 rounded-3xl p-5 md:p-6">
+              <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 mb-5">
                 <div>
                   <h3 className="text-xl font-black">Usuarios registrados</h3>
                   <p className="text-white/40 text-sm">
@@ -607,7 +617,7 @@ Nueva contraseña: ${newPassword}`
                 />
               </div>
 
-              <div className="space-y-3 max-h-[680px] overflow-y-auto pr-1">
+              <div className="space-y-3 max-h-[620px] overflow-y-auto pr-1">
                 {filteredUsers.map((u) => {
                   const online = isOnline(u.last_seen_at);
                   const isAdminUser =
@@ -618,7 +628,7 @@ Nueva contraseña: ${newPassword}`
                       key={u.id}
                       className="bg-[#0b1623] border border-white/10 rounded-2xl p-4"
                     >
-                      <div className="hidden xl:grid grid-cols-[1.2fr_1.8fr_0.8fr_0.8fr_1.1fr_1.1fr] gap-3 items-center text-sm">
+                      <div className="grid grid-cols-1 lg:grid-cols-[1.2fr_1.8fr_0.8fr_0.8fr_1.1fr_1.1fr] gap-3 items-start lg:items-center text-sm">
                         <div>
                           <div className="font-black">{u.name}</div>
                           <div
@@ -628,10 +638,10 @@ Nueva contraseña: ${newPassword}`
                           </div>
                         </div>
 
-                        <div className="text-white/70 truncate">{u.email}</div>
+                        <div className="text-white/70 break-all">{u.email}</div>
 
                         <div className="uppercase font-black text-green-400">
-                          {planLabel(u.plan)}
+                          {u.plan}
                         </div>
 
                         <div className={u.active ? "text-green-400" : "text-red-400"}>
@@ -655,84 +665,52 @@ Nueva contraseña: ${newPassword}`
                         </div>
                       </div>
 
-                      <div className="xl:hidden space-y-3">
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <div className="text-lg font-black">{u.name}</div>
-                            <div className="text-white/60 text-sm break-all">
-                              {u.email}
-                            </div>
-                          </div>
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        <select
+                          value={u.plan}
+                          onChange={(e) => updateUserPlan(u, e.target.value)}
+                          className="bg-white/10 rounded-xl px-3 py-2 text-sm"
+                          disabled={isAdminUser}
+                        >
+                          <option value="beta">Beta</option>
+                          <option value="premium">Premium</option>
+                          <option value="vip">VIP</option>
+                          <option value="admin">ADMIN</option>
+                        </select>
 
-                          <span className="rounded-full bg-green-500/10 px-3 py-1 text-xs font-black text-green-400">
-                            {planLabel(u.plan)}
-                          </span>
-                        </div>
+                        <button
+                          onClick={() => updateUserExpiry(u)}
+                          className="bg-purple-500/20 text-purple-300 rounded-xl px-3 py-2 text-sm"
+                        >
+                          📅 Expira
+                        </button>
 
-                        <div className="grid grid-cols-2 gap-3 text-sm">
-                          <InfoBox
-                            label="Estado"
-                            value={u.active ? "Activo" : "Inactivo"}
-                            tone={u.active ? "green" : "red"}
-                          />
-                          <InfoBox
-                            label="Conexión"
-                            value={online ? "Online" : "Offline"}
-                            tone={online ? "green" : "gray"}
-                          />
-                          <InfoBox label="Login" value={formatDate(u.last_login_at)} />
-                          <InfoBox
-                            label="Actividad"
-                            value={onlineStatus(u.last_seen_at)}
-                            tone="cyan"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
                         {!isAdminUser && (
                           <>
-                            <select
-                              value={u.plan}
-                              onChange={(e) => updateUserPlan(u, e.target.value)}
-                              className="bg-white/10 rounded-xl px-3 py-3 sm:py-2 text-sm"
-                            >
-                              <option value="beta">Beta</option>
-                              <option value="premium">Premium</option>
-                              <option value="vip">VIP</option>
-                            </select>
-
-                            <button
-                              onClick={() => updateUserExpiry(u)}
-                              className="bg-purple-500/20 text-purple-300 rounded-xl px-3 py-3 sm:py-2 text-sm"
-                            >
-                              📅 Expira
-                            </button>
-
                             <button
                               onClick={() => toggleUser(u.id, u.active)}
-                              className="bg-white/10 rounded-xl px-3 py-3 sm:py-2 text-sm"
+                              className="bg-white/10 rounded-xl px-3 py-2 text-sm"
                             >
                               {u.active ? "Desactivar" : "Activar"}
                             </button>
 
                             <button
                               onClick={() => resetPassword(u)}
-                              className="bg-yellow-500/20 text-yellow-300 rounded-xl px-3 py-3 sm:py-2 text-sm"
+                              className="bg-yellow-500/20 text-yellow-300 rounded-xl px-3 py-2 text-sm"
                             >
                               🔑 Reset
                             </button>
 
                             <button
                               onClick={() => forceLogout(u)}
-                              className="bg-blue-500/20 text-blue-300 rounded-xl px-3 py-3 sm:py-2 text-sm"
+                              className="bg-blue-500/20 text-blue-300 rounded-xl px-3 py-2 text-sm"
                             >
                               🚪 Expulsar
                             </button>
 
                             <button
                               onClick={() => deleteUser(u)}
-                              className="bg-red-500/20 text-red-300 rounded-xl px-3 py-3 sm:py-2 text-sm"
+                              className="bg-red-500/20 text-red-300 rounded-xl px-3 py-2 text-sm"
                             >
                               Eliminar
                             </button>
@@ -741,7 +719,7 @@ Nueva contraseña: ${newPassword}`
 
                         <button
                           onClick={() => copyAccess(u)}
-                          className="bg-green-500/20 text-green-300 rounded-xl px-3 py-3 sm:py-2 text-sm"
+                          className="bg-green-500/20 text-green-300 rounded-xl px-3 py-2 text-sm"
                         >
                           Copiar
                         </button>
@@ -759,8 +737,8 @@ Nueva contraseña: ${newPassword}`
             </div>
           </div>
 
-          <div className="mt-6 bg-[#07111c] border border-white/10 rounded-3xl p-4 md:p-6">
-            <div className="flex flex-col gap-4 md:flex-row md:justify-between md:items-center mb-5">
+          <div className="mt-6 bg-[#07111c] border border-white/10 rounded-3xl p-5 md:p-6">
+            <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 mb-5">
               <div>
                 <h3 className="text-xl font-black">Historial de conexiones</h3>
                 <p className="text-white/40 text-sm">
@@ -777,84 +755,45 @@ Nueva contraseña: ${newPassword}`
               </button>
             </div>
 
-            <div className="space-y-3 max-h-[430px] overflow-y-auto pr-1">
+            <div className="space-y-3 max-h-[420px] overflow-y-auto pr-1">
               {logs.map((log) => (
                 <div
                   key={log.id}
-                  className="bg-[#0b1623] border border-white/10 rounded-2xl p-4 text-sm"
+                  className="grid grid-cols-1 md:grid-cols-[1.7fr_0.7fr_1fr_1fr_1fr_1fr_1.2fr] gap-2 md:gap-3 items-start md:items-center bg-[#0b1623] border border-white/10 rounded-2xl p-4 text-sm"
                 >
-                  <div className="hidden xl:grid grid-cols-[1.7fr_0.7fr_1fr_1fr_1fr_1fr_1.2fr] gap-3 items-center">
-                    <div>
-                      <div className="font-black">{log.email ?? "Sin email"}</div>
-                      <div className="text-white/40">{log.user_id ?? "Sin ID"}</div>
+                  <div>
+                    <div className="font-black break-all">
+                      {log.email ?? "Sin email"}
                     </div>
-
-                    <div className="font-black text-green-400">
-                      {log.role ?? "USER"}
-                    </div>
-
-                    <div className="text-white/70 truncate">
-                      {log.ip ?? "Sin IP"}
-                    </div>
-
-                    <div className="text-white/70">
-                      {log.device ?? getDevice(log.user_agent)}
-                    </div>
-
-                    <div className="text-white/70">
-                      {log.browser ?? getBrowser(log.user_agent)}
-                    </div>
-
-                    <div className="text-white/70">
-                      {log.city || log.country
-                        ? `${log.city ?? ""} ${log.country ?? ""}`.trim()
-                        : "Sin ubicación"}
-                    </div>
-
-                    <div className="text-white/50 text-xs">
-                      {formatDate(log.created_at)}
+                    <div className="text-white/40 break-all">
+                      {log.user_id ?? "Sin ID"}
                     </div>
                   </div>
 
-                  <div className="xl:hidden space-y-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="font-black break-all">
-                          {log.email ?? "Sin email"}
-                        </div>
-                        <div className="text-xs text-white/40 break-all">
-                          {log.user_id ?? "Sin ID"}
-                        </div>
-                      </div>
+                  <div className="font-black text-green-400">
+                    {log.role ?? "USER"}
+                  </div>
 
-                      <span className="rounded-full bg-green-500/10 px-3 py-1 text-xs font-black text-green-400">
-                        {log.role ?? "USER"}
-                      </span>
-                    </div>
+                  <div className="text-white/70 break-all">
+                    {log.ip ?? "Sin IP"}
+                  </div>
 
-                    <div className="grid grid-cols-2 gap-3 text-sm">
-                      <InfoBox label="IP" value={log.ip ?? "Sin IP"} />
-                      <InfoBox
-                        label="Dispositivo"
-                        value={log.device ?? getDevice(log.user_agent)}
-                      />
-                      <InfoBox
-                        label="Navegador"
-                        value={log.browser ?? getBrowser(log.user_agent)}
-                      />
-                      <InfoBox
-                        label="Ubicación"
-                        value={
-                          log.city || log.country
-                            ? `${log.city ?? ""} ${log.country ?? ""}`.trim()
-                            : "Sin ubicación"
-                        }
-                      />
-                    </div>
+                  <div className="text-white/70">
+                    {log.device ?? getDevice(log.user_agent)}
+                  </div>
 
-                    <div className="text-xs text-white/50">
-                      {formatDate(log.created_at)}
-                    </div>
+                  <div className="text-white/70">
+                    {log.browser ?? getBrowser(log.user_agent)}
+                  </div>
+
+                  <div className="text-white/70">
+                    {log.city || log.country
+                      ? `${log.city ?? ""} ${log.country ?? ""}`.trim()
+                      : "Sin ubicación"}
+                  </div>
+
+                  <div className="text-white/50 text-xs">
+                    {formatDate(log.created_at)}
                   </div>
                 </div>
               ))}
@@ -874,37 +813,9 @@ Nueva contraseña: ${newPassword}`
 
 function Card({ title, value }: { title: string; value: number }) {
   return (
-    <div className="bg-[#07111c] border border-white/10 rounded-3xl p-4 md:p-6">
+    <div className="bg-[#07111c] border border-white/10 rounded-3xl p-5 md:p-6">
       <p className="text-white/50 text-sm">{title}</p>
-      <p className="text-3xl md:text-4xl font-black text-green-400 mt-2">
-        {value}
-      </p>
-    </div>
-  );
-}
-
-function InfoBox({
-  label,
-  value,
-  tone = "gray",
-}: {
-  label: string;
-  value: string;
-  tone?: "gray" | "green" | "red" | "cyan";
-}) {
-  const toneClass =
-    tone === "green"
-      ? "text-green-400"
-      : tone === "red"
-      ? "text-red-400"
-      : tone === "cyan"
-      ? "text-cyan-400"
-      : "text-white/80";
-
-  return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
-      <div className="text-xs text-white/40">{label}</div>
-      <div className={`mt-1 break-words font-bold ${toneClass}`}>{value}</div>
+      <p className="text-4xl font-black text-green-400 mt-2">{value}</p>
     </div>
   );
 }
