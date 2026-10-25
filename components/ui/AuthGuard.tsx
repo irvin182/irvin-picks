@@ -84,7 +84,7 @@ export default function AuthGuard({
 
     checkSession();
 
-    const interval = setInterval(checkSession, 5000);
+    const interval = setInterval(checkSession, 60000);
 
     return () => {
       mounted = false;
