@@ -66,6 +66,7 @@ export default function LiveTvDashboard() {
   const [fixtureStats, setFixtureStats] = useState<any[]>([]);
   const [fixtureEvents, setFixtureEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [liveError, setLiveError] = useState<string | null>(null);
   const [tick, setTick] = useState(Date.now());
   const [lastUpdate, setLastUpdate] = useState("--:--:--");
 
@@ -79,6 +80,15 @@ export default function LiveTvDashboard() {
       const res = await fetch(`/api/live?t=${Date.now()}`, { cache: "no-store" });
       const data = await res.json();
 
+      if (!res.ok || (data?.errors && Object.keys(data.errors).length > 0) || data?.error) {
+        const message = res.status === 429
+          ? "Límite de API-Football alcanzado. Espera a que se renueve la cuota."
+          : `No se pueden cargar los partidos (HTTP ${res.status}). Comprueba API-Football.`;
+        setLiveError(message);
+        setLoading(false);
+        return;
+      }
+      setLiveError(null);
       const liveGames = Array.isArray(data.response)
         ? data.response.map(mapApiFixtureToMatch)
         : [];
@@ -98,13 +108,16 @@ export default function LiveTvDashboard() {
       setLoading(false);
     } catch (error) {
       console.error("loadLive dashboard", error);
+      setLiveError("No se pudo conectar con el servicio de partidos.");
       setLoading(false);
     }
   }
 
   useEffect(() => {
     loadLive();
-    const interval = setInterval(loadLive, 30000);
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") loadLive();
+    }, 300000);
     return () => clearInterval(interval);
   }, []);
 
@@ -126,7 +139,9 @@ export default function LiveTvDashboard() {
     }
 
     loadFixtureDetails();
-    const interval = setInterval(loadFixtureDetails, 300000);
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") loadFixtureDetails();
+    }, 600000);
     return () => clearInterval(interval);
   }, [selected?.id]);
 
@@ -138,7 +153,7 @@ export default function LiveTvDashboard() {
         <div className="text-center">
           <div className="text-5xl font-black text-green-400">IRVIN ANALYTICS</div>
           <div className="mt-4 text-white/50">
-            {loading ? "Cargando partidos..." : "No hay partidos en vivo"}
+            {loading ? "Cargando partidos..." : liveError ?? "No hay partidos en vivo"}
           </div>
         </div>
       </main>
