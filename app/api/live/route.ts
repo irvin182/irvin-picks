@@ -1,13 +1,45 @@
 import { NextRequest, NextResponse } from "next/server";
+import { unstable_cache } from "next/cache";
 import { getToken } from "next-auth/jwt";
 import { rateLimit, getClientIp } from "@/lib/security";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
-let cachedData: any = null;
-let cachedAt = 0;
+// Vercel/Next Data Cache: shared between serverless instances within a deployment.
+// Failed provider responses are cached as values too, preventing request storms.
+const LIVE_CACHE_SECONDS = 300;
+type LiveResult =
+  | { ok: true; data: { response: unknown[]; [key: string]: unknown }; updatedAt: number }
+  | { ok: false; message: string; providerStatus: number; updatedAt: number };
 
-const CACHE_TIME = 120000;
-let pendingFetch: Promise<any> | null = null;
+const readLiveFromProvider = unstable_cache(
+  async (): Promise<LiveResult> => {
+    const key = process.env.APIFOOTBALL_KEY;
+    if (!key) return { ok: false, message: "API-Football no está configurada", providerStatus: 500, updatedAt: Date.now() };
+    try {
+      const response = await fetch("https://v3.football.api-sports.io/fixtures?live=all", {
+        headers: { "x-apisports-key": key },
+        cache: "no-store",
+        signal: AbortSignal.timeout(10000),
+      });
+      if (!response.ok) {
+        return { ok: false, message: "El proveedor deportivo no está disponible o ha limitado las solicitudes", providerStatus: response.status, updatedAt: Date.now() };
+      }
+      const data = await response.json();
+      if (data?.errors && Object.keys(data.errors).length > 0) {
+        return { ok: false, message: "API-Football ha comunicado un error o un límite de cuota", providerStatus: 503, updatedAt: Date.now() };
+      }
+      if (!Array.isArray(data?.response)) {
+        return { ok: false, message: "Respuesta inesperada de API-Football", providerStatus: 502, updatedAt: Date.now() };
+      }
+      return { ok: true, data, updatedAt: Date.now() };
+    } catch {
+      return { ok: false, message: "No se pudo conectar con API-Football", providerStatus: 503, updatedAt: Date.now() };
+    }
+  },
+  ["irvin-live-fixtures-v2"],
+  { revalidate: LIVE_CACHE_SECONDS, tags: ["irvin-live-fixtures"] }
+);
+
 const ALLOWED_PLANS = ["beta", "premium", "vip"];
 
 async function getValidToken(req: NextRequest) {
@@ -80,69 +112,15 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const now = Date.now();
-
-  if (cachedData && now - cachedAt < CACHE_TIME) {
-    return NextResponse.json({
-      ...cachedData,
-      cached: true,
-      cachedAt,
-    });
-  }
-
-  const API_KEY = process.env.APIFOOTBALL_KEY;
-
-  if (!API_KEY) {
+  const result = await readLiveFromProvider();
+  if (!result.ok) {
     return NextResponse.json(
-      { error: "Falta APIFOOTBALL_KEY" },
-      { status: 500 }
+      { error: result.message, providerStatus: result.providerStatus, retryAfterSeconds: LIVE_CACHE_SECONDS },
+      { status: 503, headers: { "Cache-Control": "private, no-store", "Retry-After": String(LIVE_CACHE_SECONDS) } }
     );
   }
-
-  try {
-    // Coalesce simultaneous requests within one server instance.
-    if (!pendingFetch) {
-      pendingFetch = (async () => {
-        const res = await fetch("https://v3.football.api-sports.io/fixtures?live=all", {
-          headers: { "x-apisports-key": API_KEY },
-          cache: "no-store",
-          signal: AbortSignal.timeout(10000),
-        });
-        if (!res.ok) {
-          const error = new Error(`Proveedor deportivo HTTP ${res.status}`);
-          (error as Error & { status?: number }).status = res.status;
-          throw error;
-        }
-        const data = await res.json();
-        if (data?.errors && Object.keys(data.errors).length > 0) {
-          const error = new Error("API-Football ha devuelto un error de servicio o cuota");
-          (error as Error & { status?: number }).status = 503;
-          throw error;
-        }
-        if (!Array.isArray(data?.response)) {
-          throw new Error("Respuesta del proveedor sin lista de partidos");
-        }
-        cachedData = data;
-        cachedAt = Date.now();
-        return data;
-      })().finally(() => { pendingFetch = null; });
-    }
-    const data = await pendingFetch;
-    return NextResponse.json({ ...data, cached: false, cachedAt });
-  } catch (error) {
-    console.error("Live API error:", error);
-    if (cachedData) {
-      return NextResponse.json({
-        ...cachedData,
-        cached: true,
-        cachedAt,
-        warning: "No se pudo actualizar; mostrando la última información disponible",
-      });
-    }
-    const status = (error as Error & { status?: number })?.status;
-    return NextResponse.json(
-      { error: status === 429 ? "Límite de consultas del proveedor deportivo" : "No se pudieron cargar los partidos del proveedor deportivo" },
-      { status: status === 429 ? 429 : 503, headers: { "Cache-Control": "no-store" } }
-    );
-  }
+  return NextResponse.json(
+    { ...result.data, cachedAt: result.updatedAt },
+    { headers: { "Cache-Control": "private, no-store" } }
+  );
 }
