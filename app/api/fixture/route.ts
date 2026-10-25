@@ -1,4 +1,6 @@
+import { apiFootballFetch } from "@/lib/apiFootballFetch";
 import { NextRequest, NextResponse } from "next/server";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { getToken } from "next-auth/jwt";
 import { rateLimit, getClientIp } from "@/lib/security";
 import { unstable_cache } from "next/cache";
@@ -7,12 +9,12 @@ const loadFixture = (fixtureId: string) => unstable_cache(async () => {
   const API_KEY = process.env.APIFOOTBALL_KEY;
   if (!API_KEY) throw new Error("Falta APIFOOTBALL_KEY");
   const [statisticsRes, eventsRes] = await Promise.all([
-    fetch(`https://v3.football.api-sports.io/fixtures/statistics?fixture=${fixtureId}`, { headers: { "x-apisports-key": API_KEY }, cache: "no-store", signal: AbortSignal.timeout(12000) }),
-    fetch(`https://v3.football.api-sports.io/fixtures/events?fixture=${fixtureId}`, { headers: { "x-apisports-key": API_KEY }, cache: "no-store", signal: AbortSignal.timeout(12000) }),
+    apiFootballFetch(`https://v3.football.api-sports.io/fixtures/statistics?fixture=${fixtureId}`, { headers: { "x-apisports-key": API_KEY }, cache: "no-store", signal: AbortSignal.timeout(12000) }),
+    apiFootballFetch(`https://v3.football.api-sports.io/fixtures/events?fixture=${fixtureId}`, { headers: { "x-apisports-key": API_KEY }, cache: "no-store", signal: AbortSignal.timeout(12000) }),
   ]);
   if (!statisticsRes.ok || !eventsRes.ok) throw new Error("API-Football no disponible");
   const [statisticsJson, eventsJson] = await Promise.all([statisticsRes.json(), eventsRes.json()]);
-  if (Object.keys(statisticsJson?.errors ?? {}).length || Object.keys(eventsJson?.errors ?? {}).length) throw new Error("API-Football ha rechazado la consulta");
+  if (!Array.isArray(statisticsJson?.response) || !Array.isArray(eventsJson?.response) || Object.keys(statisticsJson?.errors ?? {}).length || Object.keys(eventsJson?.errors ?? {}).length) throw new Error("API-Football ha rechazado la consulta");
   return {
     fixtureId,
     statistics: Array.isArray(statisticsJson?.response) ? statisticsJson.response : [],
@@ -22,7 +24,7 @@ const loadFixture = (fixtureId: string) => unstable_cache(async () => {
     cached: true,
     cachedAt: Date.now(),
   };
-}, ["irvin-fixture-v2", fixtureId], { revalidate: 600 });
+}, ["irvin-fixture-v3", fixtureId], { revalidate: 600 });
 
 const ALLOWED_PLANS = ["beta", "premium", "vip"];
 
@@ -34,15 +36,15 @@ async function getValidToken(req: NextRequest) {
 
   if (!token) return null;
 
-  const role = String((token as any).role ?? "").toUpperCase();
-  const plan = String((token as any).plan ?? "").toLowerCase();
-  const blocked = (token as any).blocked === true;
-  const active = (token as any).active !== false;
-  const expiresAt = (token as any).expires_at ?? null;
+  const role = String(token.role ?? "").toUpperCase();
+  const plan = String(token.plan ?? "").toLowerCase();
+  const blocked = token.blocked === true;
+  const active = token.active !== false;
+  const expiresAt = token.expires_at ?? null;
 
   if (blocked || !active) return null;
 
-  if (expiresAt && new Date(expiresAt).getTime() < Date.now()) {
+  if (expiresAt && (!Number.isFinite(Date.parse(String(expiresAt))) || Date.parse(String(expiresAt)) < Date.now())) {
     return null;
   }
 
@@ -50,6 +52,14 @@ async function getValidToken(req: NextRequest) {
     return null;
   }
 
+  if (role !== "ADMIN") {
+    if (!token.id || !token.sessionId) return null;
+    const { data: user, error } = await supabaseAdmin.from("app_users")
+      .select("active,blocked,expires_at,active_session_id").eq("id", token.id).maybeSingle();
+    if (error || !user || user.active === false || user.blocked === true ||
+        user.active_session_id !== token.sessionId ||
+        (user.expires_at && (!Number.isFinite(Date.parse(user.expires_at)) || Date.parse(user.expires_at) < Date.now()))) return null;
+  }
   return token;
 }
 
@@ -91,8 +101,7 @@ export async function GET(req: NextRequest) {
 
   try {
     return NextResponse.json(await loadFixture(fixtureId)());
-  } catch (error) {
-    console.error("Fixture API error:", error);
-    return NextResponse.json({ fixtureId, statistics: [], events: [], error: "Error cargando detalles del partido" }, { status: 503, headers: { "Retry-After": "300" } });
+  } catch {
+    return NextResponse.json({ fixtureId, error: "Error cargando detalles del partido" }, { status: 503, headers: { "Retry-After": "300" } });
   }
 }

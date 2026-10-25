@@ -1,42 +1,21 @@
+import { apiFootballFetch } from "@/lib/apiFootballFetch";
 import { NextRequest, NextResponse } from "next/server";
 import { unstable_cache } from "next/cache";
 import { getToken } from "next-auth/jwt";
 import { rateLimit, getClientIp } from "@/lib/security";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
-// Vercel/Next Data Cache: shared between serverless instances within a deployment.
-// Failed provider responses are cached as values too, preventing request storms.
+// Only validated data enters the cache. A failed refresh cannot replace good data with an error.
 const LIVE_CACHE_SECONDS = 300;
-type LiveResult =
-  | { ok: true; data: { response: unknown[]; [key: string]: unknown }; updatedAt: number }
-  | { ok: false; message: string; providerStatus: number; updatedAt: number };
-
 const readLiveFromProvider = unstable_cache(
-  async (): Promise<LiveResult> => {
-    const key = process.env.APIFOOTBALL_KEY;
-    if (!key) return { ok: false, message: "API-Football no está configurada", providerStatus: 500, updatedAt: Date.now() };
-    try {
-      const response = await fetch("https://v3.football.api-sports.io/fixtures?live=all", {
-        headers: { "x-apisports-key": key },
-        cache: "no-store",
-        signal: AbortSignal.timeout(10000),
-      });
-      if (!response.ok) {
-        return { ok: false, message: "El proveedor deportivo no está disponible o ha limitado las solicitudes", providerStatus: response.status, updatedAt: Date.now() };
-      }
-      const data = await response.json();
-      if (data?.errors && Object.keys(data.errors).length > 0) {
-        return { ok: false, message: "API-Football ha comunicado un error o un límite de cuota", providerStatus: 503, updatedAt: Date.now() };
-      }
-      if (!Array.isArray(data?.response)) {
-        return { ok: false, message: "Respuesta inesperada de API-Football", providerStatus: 502, updatedAt: Date.now() };
-      }
-      return { ok: true, data, updatedAt: Date.now() };
-    } catch {
-      return { ok: false, message: "No se pudo conectar con API-Football", providerStatus: 503, updatedAt: Date.now() };
-    }
+  async () => {
+    const response = await apiFootballFetch("https://v3.football.api-sports.io/fixtures?live=all", {
+      signal: AbortSignal.timeout(10000),
+    });
+    const data = await response.json();
+    return { data, updatedAt: Date.now() };
   },
-  ["irvin-live-fixtures-v2"],
+  ["irvin-live-fixtures-v3"],
   { revalidate: LIVE_CACHE_SECONDS, tags: ["irvin-live-fixtures"] }
 );
 
@@ -48,17 +27,19 @@ async function getValidToken(req: NextRequest) {
     secret: process.env.NEXTAUTH_SECRET,
   });
 
-  if (!token) return null;
+  if (!token || token.blocked === true || token.active === false) return null;
+  const expiry = token.expires_at ? Date.parse(String(token.expires_at)) : null;
+  if (expiry !== null && (!Number.isFinite(expiry) || expiry < Date.now())) return null;
 
-  const role = String((token as any).role ?? "").toUpperCase();
-  const plan = String((token as any).plan ?? "").toLowerCase();
+  const role = String(token.role ?? "").toUpperCase();
+  const plan = String(token.plan ?? "").toLowerCase();
 
-  if (role === "ADMIN") return token as any;
+  if (role === "ADMIN") return token;
 
   if (!ALLOWED_PLANS.includes(plan)) return null;
 
-  const userId = (token as any).id;
-  const sessionId = (token as any).sessionId;
+  const userId = token.id;
+  const sessionId = token.sessionId;
 
   if (!userId || !sessionId) return null;
 
@@ -74,7 +55,7 @@ async function getValidToken(req: NextRequest) {
 
   if (
     user.expires_at &&
-    new Date(user.expires_at).getTime() < Date.now()
+    (!Number.isFinite(Date.parse(user.expires_at)) || Date.parse(user.expires_at) < Date.now())
   ) {
     return null;
   }
@@ -89,7 +70,7 @@ async function getValidToken(req: NextRequest) {
     .eq("id", userId)
     .eq("active_session_id", sessionId);
 
-  return token as any;
+  return token;
 }
 
 export async function GET(req: NextRequest) {
@@ -112,15 +93,16 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const result = await readLiveFromProvider();
-  if (!result.ok) {
+  try {
+    const result = await readLiveFromProvider();
     return NextResponse.json(
-      { error: result.message, providerStatus: result.providerStatus, retryAfterSeconds: LIVE_CACHE_SECONDS },
+      { ...result.data, cachedAt: result.updatedAt },
+      { headers: { "Cache-Control": "private, no-store" } }
+    );
+  } catch {
+    return NextResponse.json(
+      { error: "API-Football no disponible", retryAfterSeconds: LIVE_CACHE_SECONDS },
       { status: 503, headers: { "Cache-Control": "private, no-store", "Retry-After": String(LIVE_CACHE_SECONDS) } }
     );
   }
-  return NextResponse.json(
-    { ...result.data, cachedAt: result.updatedAt },
-    { headers: { "Cache-Control": "private, no-store" } }
-  );
 }
