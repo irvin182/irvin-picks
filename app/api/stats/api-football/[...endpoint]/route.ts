@@ -1,77 +1,36 @@
-// app/api/stats/api-football/[...endpoint]/route.ts
 import { NextResponse } from "next/server";
+import { unstable_cache } from "next/cache";
 
-type RouteParams = {
-  params: Promise<{
-    endpoint?: string[];
-  }>;
-};
+type RouteParams = { params: Promise<{ endpoint?: string[] }> };
+type ProviderResult = { status: number; data: unknown; failed: boolean };
+
+const load = (url: string) => unstable_cache(
+  async (): Promise<ProviderResult> => {
+    const key = process.env.APIFOOTBALL_KEY;
+    if (!key) return { status: 500, data: { error: "Falta APIFOOTBALL_KEY en el servidor" }, failed: true };
+    try {
+      const res = await fetch(url, { headers: { "x-apisports-key": key }, cache: "no-store", signal: AbortSignal.timeout(12000) });
+      const data: unknown = await res.json();
+      const errors = (data && typeof data === "object" && "errors" in data) ? (data as {errors?: unknown}).errors : null;
+      const failed = !res.ok || Boolean(errors && typeof errors === "object" && Object.keys(errors).length);
+      return { status: failed ? 503 : 200, data: failed ? { error: "API-Football no disponible", upstreamStatus: res.status } : data, failed };
+    } catch {
+      return { status: 503, data: { error: "API-Football no disponible" }, failed: true };
+    }
+  },
+  ["irvin-stats-v2", url],
+  { revalidate: 3600 }
+);
 
 export async function GET(req: Request, route: RouteParams) {
-  // ⬇️ NECESARIO EN NEXT 15/16: params es un Promise
   const { endpoint } = await route.params;
-
-  const key = process.env.APIFOOTBALL_KEY;
-
-  if (!key) {
-    console.error("APIFOOTBALL_KEY falta o está vacía");
-    return NextResponse.json(
-      { error: "Falta APIFOOTBALL_KEY en el servidor" },
-      { status: 500 }
-    );
+  const path = endpoint?.join("/") || "status";
+  if (!/^[a-zA-Z0-9/_-]+$/.test(path) || path.includes("..")) {
+    return NextResponse.json({ error: "Endpoint inválido" }, { status: 400 });
   }
-
-  // Qué endpoint de la API queremos: fixtures, leagues, status, etc.
-  const endpointPath = endpoint?.join("/") || "status";
-
-  // Copiamos la query string original (?live=all, etc.)
-  const urlFromReq = new URL(req.url);
-  const qs = urlFromReq.searchParams.toString();
-
-  const url = `https://v3.football.api-sports.io/${endpointPath}${
-    qs ? `?${qs}` : ""
-  }`;
-
-  console.log("[API-FOOTBALL PROXY] →", url);
-
-  try {
-    const res = await fetch(url, {
-      method: "GET",
-      headers: {
-        "x-apisports-key": key,
-      },
-      cache: "no-store",
-    });
-
-    const raw = await res.text();
-    let data: any;
-
-    try {
-      data = JSON.parse(raw);
-    } catch {
-      data = raw;
-    }
-
-    if (!res.ok) {
-      console.error("Error desde API-Football:", res.status, data);
-      return NextResponse.json(
-        {
-          error: "Error desde API-Football",
-          upstreamStatus: res.status,
-          upstreamBody: data,
-        },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.json(data, { status: 200 });
-  } catch (e: any) {
-    console.error("ERROR FETCH API-FOOTBALL:", e);
-    return NextResponse.json(
-      {
-        error: String(e?.message || e),
-      },
-      { status: 500 }
-    );
-  }
+  const params = new URL(req.url).searchParams;
+  params.sort();
+  const url = `https://v3.football.api-sports.io/${path}${params.size ? `?${params.toString()}` : ""}`;
+  const result = await load(url)();
+  return NextResponse.json(result.data, { status: result.status, headers: result.failed ? { "Retry-After": "300" } : {} });
 }

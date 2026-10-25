@@ -1,14 +1,29 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 import { rateLimit, getClientIp } from "@/lib/security";
+import { unstable_cache } from "next/cache";
 
-type CacheValue = {
-  data: any;
-  cachedAt: number;
-};
+const loadFixture = (fixtureId: string) => unstable_cache(async () => {
+  const API_KEY = process.env.APIFOOTBALL_KEY;
+  if (!API_KEY) throw new Error("Falta APIFOOTBALL_KEY");
+  const [statisticsRes, eventsRes] = await Promise.all([
+    fetch(`https://v3.football.api-sports.io/fixtures/statistics?fixture=${fixtureId}`, { headers: { "x-apisports-key": API_KEY }, cache: "no-store", signal: AbortSignal.timeout(12000) }),
+    fetch(`https://v3.football.api-sports.io/fixtures/events?fixture=${fixtureId}`, { headers: { "x-apisports-key": API_KEY }, cache: "no-store", signal: AbortSignal.timeout(12000) }),
+  ]);
+  if (!statisticsRes.ok || !eventsRes.ok) throw new Error("API-Football no disponible");
+  const [statisticsJson, eventsJson] = await Promise.all([statisticsRes.json(), eventsRes.json()]);
+  if (Object.keys(statisticsJson?.errors ?? {}).length || Object.keys(eventsJson?.errors ?? {}).length) throw new Error("API-Football ha rechazado la consulta");
+  return {
+    fixtureId,
+    statistics: Array.isArray(statisticsJson?.response) ? statisticsJson.response : [],
+    events: Array.isArray(eventsJson?.response) ? eventsJson.response : [],
+    rawStatisticsErrors: statisticsJson?.errors ?? null,
+    rawEventsErrors: eventsJson?.errors ?? null,
+    cached: true,
+    cachedAt: Date.now(),
+  };
+}, ["irvin-fixture-v2", fixtureId], { revalidate: 600 });
 
-const CACHE_TIME = 60000;
-const cache = new Map<string, CacheValue>();
 const ALLOWED_PLANS = ["beta", "premium", "vip"];
 
 async function getValidToken(req: NextRequest) {
@@ -74,85 +89,10 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const now = Date.now();
-  const cached = cache.get(fixtureId);
-
-  if (cached && now - cached.cachedAt < CACHE_TIME) {
-    return NextResponse.json({
-      ...cached.data,
-      cached: true,
-      cachedAt: cached.cachedAt,
-    });
-  }
-
   try {
-    const [statisticsRes, eventsRes] = await Promise.all([
-      fetch(
-        `https://v3.football.api-sports.io/fixtures/statistics?fixture=${fixtureId}`,
-        {
-          headers: {
-            "x-apisports-key": API_KEY,
-          },
-          cache: "no-store",
-        }
-      ),
-      fetch(
-        `https://v3.football.api-sports.io/fixtures/events?fixture=${fixtureId}`,
-        {
-          headers: {
-            "x-apisports-key": API_KEY,
-          },
-          cache: "no-store",
-        }
-      ),
-    ]);
-
-    if (!statisticsRes.ok || !eventsRes.ok) {
-      throw new Error(
-        `API-Football error statistics=${statisticsRes.status} events=${eventsRes.status}`
-      );
-    }
-
-    const statisticsJson = await statisticsRes.json();
-    const eventsJson = await eventsRes.json();
-
-    const payload = {
-      fixtureId,
-      statistics: Array.isArray(statisticsJson?.response)
-        ? statisticsJson.response
-        : [],
-      events: Array.isArray(eventsJson?.response) ? eventsJson.response : [],
-      rawStatisticsErrors: statisticsJson?.errors ?? null,
-      rawEventsErrors: eventsJson?.errors ?? null,
-      cached: false,
-      cachedAt: now,
-    };
-
-    cache.set(fixtureId, {
-      data: payload,
-      cachedAt: now,
-    });
-
-    return NextResponse.json(payload);
+    return NextResponse.json(await loadFixture(fixtureId)());
   } catch (error) {
     console.error("Fixture API error:", error);
-
-    if (cached) {
-      return NextResponse.json({
-        ...cached.data,
-        cached: true,
-        warning: "API failed, showing cached fixture data",
-      });
-    }
-
-    return NextResponse.json(
-      {
-        fixtureId,
-        statistics: [],
-        events: [],
-        error: "Error cargando detalles del partido",
-      },
-      { status: 200 }
-    );
+    return NextResponse.json({ fixtureId, statistics: [], events: [], error: "Error cargando detalles del partido" }, { status: 503, headers: { "Retry-After": "300" } });
   }
 }

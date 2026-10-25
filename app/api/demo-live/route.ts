@@ -1,32 +1,24 @@
 import { NextResponse } from "next/server";
+import { unstable_cache } from "next/cache";
 
 export const dynamic = "force-dynamic";
 
+const loadDemo = unstable_cache(async () => {
+  const key = process.env.APIFOOTBALL_KEY;
+  if (!key) throw new Error("Falta APIFOOTBALL_KEY");
+  const res = await fetch("https://v3.football.api-sports.io/fixtures?live=all", {
+    headers: { "x-apisports-key": key }, cache: "no-store", signal: AbortSignal.timeout(12000),
+  });
+  if (!res.ok) throw new Error("API-Football no disponible");
+  const data = await res.json();
+  if (Object.keys(data?.errors ?? {}).length || !Array.isArray(data?.response)) throw new Error("API-Football ha rechazado la consulta");
+  return { response: data.response, results: data.results ?? data.response.length };
+}, ["irvin-demo-live-v2"], { revalidate: 300 });
+
 export async function GET() {
   try {
-    const API_KEY = process.env.APIFOOTBALL_KEY;
-
-    if (!API_KEY) {
-      return NextResponse.json({ error: "Falta APIFOOTBALL_KEY" }, { status: 500 });
-    }
-
-    const res = await fetch("https://v3.football.api-sports.io/fixtures?live=all", {
-      headers: {
-        "x-apisports-key": API_KEY,
-      },
-      cache: "no-store",
-    });
-
-    const data = await res.json();
-
-    return NextResponse.json({
-      response: data.response ?? [],
-      results: data.results ?? 0,
-    });
+    return NextResponse.json(await loadDemo());
   } catch {
-    return NextResponse.json(
-      { error: "Error cargando demo en vivo" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Error cargando demo en vivo" }, { status: 503, headers: { "Retry-After": "300" } });
   }
 }
