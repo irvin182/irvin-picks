@@ -1,14 +1,16 @@
 "use client";
 
 import Link from "next/link";
+import { useHomeTranslations } from "@/components/i18n/HomeTranslations";
 
 export default function HomePage() {
+  const t = useHomeTranslations();
   return (
     <main className="min-h-screen bg-[#03070b] text-white">
       <section className="max-w-7xl mx-auto px-6 py-20">
         <div className="text-center">
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-green-500/10 border border-green-500/30 text-green-400 font-bold mb-8">
-            ● IA DEPORTIVA EN TIEMPO REAL
+            ● {t.badge}
           </div>
 
           <h1 className="text-5xl md:text-7xl font-black tracking-tight">
@@ -16,9 +18,7 @@ export default function HomePage() {
           </h1>
 
           <p className="mt-8 text-xl md:text-2xl text-white/70 max-w-4xl mx-auto leading-relaxed">
-            Plataforma privada de análisis deportivo con inteligencia artificial.
-            Analiza partidos en vivo, detecta momentum, calcula probabilidades y
-            genera informes premium para tomar mejores decisiones.
+            {t.heroDescription}
           </p>
 
           <div className="flex justify-center gap-5 mt-12 flex-wrap">
@@ -26,74 +26,74 @@ export default function HomePage() {
               href="/demo"
               className="px-8 py-4 rounded-2xl bg-green-500 text-black font-black text-lg hover:scale-105 transition"
             >
-              VER DEMO EN VIVO
+              {t.demo}
             </Link>
 
             <Link
               href="/login"
               className="px-8 py-4 rounded-2xl border border-white/20 bg-white/5 hover:bg-white/10 transition font-bold"
             >
-              ENTRAR AL SISTEMA
+              {t.login}
             </Link>
           </div>
 
           <p className="mt-6 text-sm text-white/40">
-            No garantizamos ganancias. Irvin Analytics es una herramienta de análisis estadístico e informativo.
+            {t.shortNotice}
           </p>
         </div>
       </section>
 
       <section className="max-w-7xl mx-auto px-6 pb-20">
         <h2 className="text-4xl font-black text-center mb-6">
-          ¿Qué puedes analizar?
+          {t.features}
         </h2>
 
         <p className="text-center text-white/60 max-w-3xl mx-auto mb-14 text-lg">
-          Toda la información importante del partido en una sola pantalla:
-          estadísticas, IA, probabilidades, momentum y señales en vivo.
+          {t.featuresIntro}
         </p>
 
         <div className="grid md:grid-cols-3 gap-8">
-          <Card title="📺 TV EN VIVO" text="Pantalla profesional para seguir partidos en directo con datos, eventos y probabilidades." />
-          <Card title="🧠 IA PREDICTIVA" text="Modelo Poisson, Próximo Gol, BTTS, Over/Under, marcador probable y análisis inteligente." />
-          <Card title="📊 MATCH MOMENTUM" text="Lectura del dominio del partido para detectar qué equipo está generando más peligro." />
-          <Card title="⚽ INFORMES PREMIUM" text="Informes diarios con partidos destacados, probabilidades y análisis estadístico." />
-          <Card title="⚡ DATOS EN TIEMPO REAL" text="Actualización constante de estadísticas, goles, tiros, corners, tarjetas y eventos." />
-          <Card title="🔒 ACCESO PRIVADO" text="Sistema protegido con usuarios, planes, licencias y control de acceso." />
+            {t.cards.map((card, index) => {
+              const icons = ["📺", "🧠", "📊", "⚽", "⚡", "🔒"];
+              return (
+                <Card
+                  key={index}
+                  title={`${icons[index]} ${card.title}`}
+                  text={card.text}
+                />
+              );
+            })}
         </div>
       </section>
 
       <section className="bg-[#07111c] border-y border-white/10">
         <div className="max-w-7xl mx-auto px-6 py-20 text-center">
           <h2 className="text-4xl font-black mb-6">
-            Diseñado para gente que quiere analizar mejor
+            {t.sectionTitle}
           </h2>
 
           <p className="text-white/60 max-w-4xl mx-auto text-lg leading-8">
-            Irvin Analytics no es una promesa de dinero fácil. Es una herramienta
-            para ver el fútbol con datos reales, modelos matemáticos e inteligencia
-            artificial, ayudándote a tomar decisiones con más información y menos intuición.
+            {t.sectionText}
           </p>
         </div>
       </section>
 
       <section className="relative z-50 bg-[#03070b]">
         <div className="max-w-7xl mx-auto px-6 py-20">
-          <h2 className="text-4xl font-black text-center mb-4">Planes</h2>
+          <h2 className="text-4xl font-black text-center mb-4">{t.plans}</h2>
 
           <p className="text-center text-white/60 mb-14">
-            Elige tu acceso mensual y empieza a usar Irvin Analytics.
+            {t.plansIntro}
           </p>
 
           <div className="grid md:grid-cols-3 gap-8">
-            <Price plan="BETA" price="9,90€" desc="Acceso básico para probar la plataforma." />
-            <Price plan="PREMIUM" price="19,90€" desc="TV en vivo, informes e IA avanzada." featured />
-            <Price plan="VIP" price="39,90€" desc="Acceso completo a todas las funciones premium." />
+            <Price activate={t.activate} popular={t.popular} plan="BETA" price="9,90€" desc={t.betaDesc} />
+            <Price activate={t.activate} popular={t.popular} plan="PREMIUM" price="19,90€" desc={t.premiumDesc} featured />
+            <Price activate={t.activate} popular={t.popular} plan="VIP" price="39,90€" desc={t.vipDesc} />
           </div>
 
           <p className="mt-10 text-center text-xs text-white/35 max-w-4xl mx-auto leading-6">
-            Aviso responsable: Irvin Analytics ofrece análisis estadístico y deportivo.
-            Las predicciones no son garantías de resultado. El uso de la información es responsabilidad del usuario.
+            {t.disclaimer}
           </p>
         </div>
       </section>
@@ -111,11 +111,15 @@ function Card({ title, text }: { title: string; text: string }) {
 }
 
 function Price({
+  activate,
+  popular,
   plan,
   price,
   desc,
   featured,
 }: {
+  activate: string;
+  popular: string;
   plan: string;
   price: string;
   desc: string;
@@ -137,7 +141,7 @@ function Price({
     >
       {featured && (
         <div className="absolute right-4 top-4 rounded-full bg-green-400/20 border border-green-400/40 px-3 py-1 text-xs font-black text-green-300">
-          MÁS POPULAR
+          {popular}
         </div>
       )}
 
@@ -154,7 +158,7 @@ function Price({
         onClick={goCheckout}
         className="relative z-[9999] w-full mt-10 rounded-2xl border border-white/10 bg-white/5 px-6 py-4 text-white font-black tracking-wide hover:border-green-400/60 hover:bg-green-400 hover:text-black hover:shadow-[0_0_35px_rgba(34,197,94,0.55)] active:scale-95 transition-all duration-300 cursor-pointer"
       >
-        ACTIVAR {plan}
+        {activate} {plan}
       </button>
     </div>
   );

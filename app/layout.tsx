@@ -2,6 +2,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import ActivityTracker from "@/components/ActivityTracker";
+import LanguageSwitcher from "@/components/i18n/LanguageSwitcher";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://irvinanalytics.com"),
@@ -48,6 +49,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="es">
      <body>
   <ActivityTracker />
+  <LanguageSwitcher />
   {children}
 </body>
     </html>
