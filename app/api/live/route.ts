@@ -6,7 +6,8 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin";
 let cachedData: any = null;
 let cachedAt = 0;
 
-const CACHE_TIME = 30000;
+const CACHE_TIME = 120000;
+let pendingFetch: Promise<any> | null = null;
 const ALLOWED_PLANS = ["beta", "premium", "vip"];
 
 async function getValidToken(req: NextRequest) {
@@ -99,52 +100,49 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const res = await fetch(
-      "https://v3.football.api-sports.io/fixtures?live=all",
-      {
-        headers: {
-          "x-apisports-key": API_KEY,
-        },
-        cache: "no-store",
-      }
-    );
-
-    if (!res.ok) {
-      throw new Error(`API-Football HTTP ${res.status}`);
+    // Coalesce simultaneous requests within one server instance.
+    if (!pendingFetch) {
+      pendingFetch = (async () => {
+        const res = await fetch("https://v3.football.api-sports.io/fixtures?live=all", {
+          headers: { "x-apisports-key": API_KEY },
+          cache: "no-store",
+          signal: AbortSignal.timeout(10000),
+        });
+        if (!res.ok) {
+          const error = new Error(`Proveedor deportivo HTTP ${res.status}`);
+          (error as Error & { status?: number }).status = res.status;
+          throw error;
+        }
+        const data = await res.json();
+        if (data?.errors && Object.keys(data.errors).length > 0) {
+          const error = new Error("API-Football ha devuelto un error de servicio o cuota");
+          (error as Error & { status?: number }).status = 503;
+          throw error;
+        }
+        if (!Array.isArray(data?.response)) {
+          throw new Error("Respuesta del proveedor sin lista de partidos");
+        }
+        cachedData = data;
+        cachedAt = Date.now();
+        return data;
+      })().finally(() => { pendingFetch = null; });
     }
-
-    const data = await res.json();
-
-    if (data?.errors && Object.keys(data.errors).length > 0) {
-      return NextResponse.json({
-        ...data,
-        cached: false,
-        warning: "API-Football devolvió error",
-      });
-    }
-
-    cachedData = data;
-    cachedAt = now;
-
-    return NextResponse.json({
-      ...data,
-      cached: false,
-      cachedAt,
-    });
+    const data = await pendingFetch;
+    return NextResponse.json({ ...data, cached: false, cachedAt });
   } catch (error) {
     console.error("Live API error:", error);
-
     if (cachedData) {
       return NextResponse.json({
         ...cachedData,
         cached: true,
-        warning: "API failed, showing cached data",
+        cachedAt,
+        warning: "No se pudo actualizar; mostrando la última información disponible",
       });
     }
-
+    const status = (error as Error & { status?: number })?.status;
     return NextResponse.json(
-      { error: "Error cargando partidos live" },
-      { status: 500 }
+      { error: status === 429 ? "Límite de consultas del proveedor deportivo" : "No se pudieron cargar los partidos del proveedor deportivo" },
+      { status: status === 429 ? 429 : 503, headers: { "Cache-Control": "no-store" } }
     );
   }
 }
