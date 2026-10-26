@@ -20,6 +20,7 @@ function load(file, imports, globals = {}) {
   }, Date, Response, AbortController, AbortSignal, console, ...globals });
   return exports;
 }
+const liveData = load('lib/liveData.ts', {});
 // Synthetic fixtures are test inputs only; no external service is contacted.
 const matches = ['1H', 'HT', '2H', 'ET'].map((half, index) => ({
   id: index + 101, half, minuteNumber: 30 + index, league: `League ${index}`,
@@ -32,6 +33,7 @@ function dashboard(selected = matches[0], fetch = async () => Response.json({sta
   let index = 0;
   const component = load('components/ui/LiveTvDashboard.tsx', {
     react: {...React, useState: () => { const slot = index++; return [values[slot], value => { writes.push([slot, value]); values[slot] = typeof value === 'function' ? value(values[slot]) : value; }]; }, useEffect: fn => effects.push(fn)},
+    '@/lib/liveData': liveData,
     '@/lib/livePoisson': {calculateLivePoisson: () => ({})},
   }, { fetch, setInterval: () => 1, clearInterval: () => {}, document: {visibilityState: 'visible', addEventListener: () => {}, removeEventListener: () => {}} }).default;
   const render = () => { index = 0; effects.length = 0; return component(); };
@@ -124,6 +126,7 @@ test('rapid A-B-C-D-A selection never uses another fixture statistics, even with
       useState: () => { const key = slot++; return [values[key], value => {values[key] = typeof value === 'function' ? value(values[key]) : value;}]; },
       useEffect: fn => {effects[effectSlot++] = fn;},
     },
+    '@/lib/liveData': liveData,
     '@/lib/livePoisson': {calculateLivePoisson: input => {predictionInput = input; return {};}},
   }, {fetch: (url, options) => new Promise(resolve => pending.push({url, signal: options.signal, resolve})),
     setInterval: () => 1, clearInterval: () => {}, document: {visibilityState: 'visible', addEventListener: () => {}, removeEventListener: () => {}}}).default;
@@ -145,16 +148,16 @@ test('rapid A-B-C-D-A selection never uses another fixture statistics, even with
   assert.equal(predictionInput.homeShots, 17);
   // Mimic an automatic fallback after a live list update: ID gating must work even without a click clearing stats.
   values[1] = games[1]; tree = render();
-  assert.equal(predictionInput.homeShots, 0);
+  assert.equal(predictionInput.homeShots, null);
   for (const index of [2, 3, 0]) {
     buttons(tree)[index].props.onClick(); tree = render();
-    assert.equal(predictionInput.homeShots, 0);
+    assert.equal(predictionInput.homeShots, null);
   }
   assert.deepEqual(pending.map(request => request.url), [101,102,103,104,101].map(id => `/api/fixture?id=${id}`));
   for (const request of pending.slice(1, -1).reverse()) {
     assert.equal(request.signal.aborted, true);
     await settle(request, 99);
-    assert.equal(predictionInput.homeShots, 0);
+    assert.equal(predictionInput.homeShots, null);
   }
   await settle(pending.at(-1), 11);
   assert.equal(predictionInput.homeShots, 11);
@@ -192,6 +195,7 @@ test('browser checks shared cache every 30 seconds without overlapping requests 
     removeEventListener: event => listeners.delete(event)};
   const component = load('components/ui/LiveTvDashboard.tsx', {
     react: {...React, useState: () => {const slot = index++; return [values[slot], value => writes.push([slot, value])];}, useEffect: fn => effects.push(fn)},
+    '@/lib/liveData': liveData,
     '@/lib/livePoisson': {calculateLivePoisson: () => ({})},
   }, {document, fetch: url => new Promise(resolve => requests.push({url, resolve})),
     setInterval: (fn, ms) => {timers.push({fn, ms}); return 1;}, clearInterval: () => {}}).default;
@@ -209,4 +213,73 @@ test('browser checks shared cache every 30 seconds without overlapping requests 
   requests[1].resolve(Response.json({response: [], cachedAt: Date.now()}));
   await new Promise(resolve => setImmediate(resolve));
   assert.equal(writes.length, writeCount);
+});
+
+test('real engine UI distinguishes missing, partial and complete provider data without fake confidence', async () => {
+  const {renderToStaticMarkup} = await import('react-dom/server');
+  const engine = load('lib/livePoisson.ts', {});
+  const selected = {...matches[0], half:'2H', minuteNumber:65};
+  const teamStats = (name, full) => ({team:{name}, statistics: full ? [
+    {type:'Total Shots',value:10},{type:'Shots on Goal',value:3},
+    {type:'Ball Possession',value:'50%'},{type:'expected_goals',value:'0.8'},
+  ] : [{type:'Total Shots',value:0}]});
+  for (const [stats,quality] of [[[],'básica'],[[teamStats(selected.home,false)],'intermedia'],[[teamStats(selected.home,true),teamStats(selected.away,true)],'avanzada']]) {
+    let slot=0;
+    const now=Date.now();
+    const values=[[selected],selected,stats,[],false,null,now,null,'12:00:00',selected.id,now,false,now];
+    const component=load('components/ui/LiveTvDashboard.tsx', {
+      react:{...React,useState:()=>[values[slot++],()=>{}],useEffect:()=>{}},
+      '@/lib/liveData':liveData,'@/lib/livePoisson':engine,
+    }).default;
+    const html=renderToStaticMarkup(component());
+    assert.ok(html.includes(quality.toUpperCase()));
+    assert.ok(html.includes('Confianza no evaluable'));
+    assert.equal(html.includes('null%'),false); assert.equal(html.includes('undefined%'),false);
+    assert.equal(html.includes('33%'),false); assert.equal(html.includes('34%'),false);
+    if(quality==='básica') {
+      assert.ok(html.includes('No disponible / No disponible'));
+      assert.ok(html.includes('No disponible - No disponible'));
+      assert.equal(html.includes('50% / 50%'),false);
+    }
+    if(quality==='avanzada') assert.ok(html.includes('estimación no calibrada'));
+  }
+});
+
+test('mobile A-B-A selection rejects the first A response even when it arrives after the latest A', async () => {
+  const games=matches.slice(0,2), now=Date.now();
+  const values=[games,games[0],[],[],false,now,now,games[0].id,false,now];
+  const effects=[], timers=[], pending=[], generation={current:{version:0}};
+  let slot=0, effectSlot=0, cleanup, selectedId, input;
+  const component=load('components/ui/LiveTvMobile.tsx', {
+    react:{...React,useState:()=>{const key=slot++;return [values[key],value=>{values[key]=typeof value==='function'?value(values[key]):value;}];},
+      useRef:()=>generation,useCallback:fn=>fn,useMemo:fn=>fn(),useEffect:fn=>{effects[effectSlot++]=fn;}},
+    '@/lib/liveData':liveData,
+    '@/lib/livePoisson':{calculateLivePoisson:values=>{input=values;return {homeWin:null,dataQuality:'básica',issues:[],aiDecisions:[]};}},
+    './live/LiveMobileHeader':{default:()=>null},'./live/MobileMatchSelector':{default:()=>null},
+  },{fetch:(url,options)=>new Promise(resolve=>pending.push({url,signal:options.signal,resolve})),
+    setTimeout:fn=>{timers.push(fn);return timers.length;},clearTimeout:()=>{},setInterval:()=>1,clearInterval:()=>{},
+    document:{visibilityState:'visible'},localStorage:{setItem:()=>{},getItem:()=>null}}).default;
+  function render(){slot=0;effectSlot=0;const tree=component();if(selectedId!==values[1].id){cleanup?.();selectedId=values[1].id;cleanup=effects[2]();timers.at(-1)();}return tree;}
+  let tree=render();
+  buttons(tree).find(button=>button.props['data-live-fixture-id']===games[1].id).props.onClick();tree=render();
+  buttons(tree).find(button=>button.props['data-live-fixture-id']===games[0].id).props.onClick();render();
+  assert.deepEqual(pending.map(request=>request.url),[101,102,101].map(id=>`/api/fixture?id=${id}`));
+  async function finish(request,shots){request.resolve(Response.json({fixtureId:101,statistics:[{team:{name:games[0].home},statistics:[{type:'Total Shots',value:shots}]}],events:[],cachedAt:now}));await new Promise(resolve=>setImmediate(resolve));render();}
+  await finish(pending[2],11);assert.equal(input.homeShots,11);
+  await finish(pending[0],99);assert.equal(input.homeShots,11);
+  await finish(pending[1],88);assert.equal(input.homeShots,11);
+  cleanup();
+});
+
+test('live polling errors mark a previously fresh snapshot stale instead of retaining eligibility for estimates', async () => {
+  const view=dashboard(matches[0],async()=>Response.json({error:'unavailable'},{status:503}));
+  const stop=view.effects[1]();await new Promise(resolve=>setImmediate(resolve));
+  assert.ok(view.writes.some(([slot,value])=>slot===11 && value===true));stop();
+});
+
+test('fixture details carrying another match ID are rejected before entering the selected analysis', async () => {
+  const view=dashboard(matches[0],async()=>Response.json({fixtureId:999,statistics:[{team:{name:matches[0].home}}],events:[]}));
+  const stop=view.effects[2]();await new Promise(resolve=>setImmediate(resolve));
+  assert.ok(view.writes.some(([slot,value])=>slot===7 && value.includes('no disponibles')));
+  assert.equal(view.writes.some(([slot])=>slot===9),false);stop();
 });

@@ -2,17 +2,20 @@
 
 import React, { useEffect, useState } from "react";
 import { calculateLivePoisson } from "@/lib/livePoisson";
+import { readLiveStat as getStat, liveValue, type FixtureStatistics } from "@/lib/liveData";
 
 type Match = {
   id: number;
-  minuteNumber: number;
+  minuteNumber: number | null;
   half: string;
   league: string;
   country: string;
+  homeId?: number;
+  awayId?: number;
   home: string;
   away: string;
-  homeScore: number;
-  awayScore: number;
+  homeScore: number | null;
+  awayScore: number | null;
   homeFlag: string;
   awayFlag: string;
   apiUpdatedAt: number;
@@ -21,12 +24,8 @@ type Match = {
 type ApiFixture = {
   fixture: { id: number; status?: { elapsed?: number | null; short?: string } };
   league?: { name?: string; country?: string };
-  teams?: { home?: { name?: string; logo?: string }; away?: { name?: string; logo?: string } };
+  teams?: { home?: { id?: number; name?: string; logo?: string }; away?: { id?: number; name?: string; logo?: string } };
   goals?: { home?: number | null; away?: number | null };
-};
-type FixtureStatistics = {
-  team?: { name?: string };
-  statistics?: { type: string; value: string | number | null }[];
 };
 type FixtureEvent = {
   type: string;
@@ -34,43 +33,30 @@ type FixtureEvent = {
   player?: { name?: string };
   team?: { name?: string };
 };
-type Prediction = ReturnType<typeof calculateLivePoisson> & {
-  btts?: number;
-  firstHalfHome?: number;
-  firstHalfAway?: number;
-};
+type Prediction = ReturnType<typeof calculateLivePoisson>;
 
 function mapApiFixtureToMatch(fx: ApiFixture): Match {
   return {
     id: fx.fixture?.id,
-    minuteNumber: fx.fixture?.status?.elapsed ?? 0,
+    minuteNumber: fx.fixture?.status?.elapsed ?? null,
     half: fx.fixture?.status?.short ?? "LIVE",
     league: fx.league?.name ?? "Liga",
     country: fx.league?.country ?? "World",
+    homeId: fx.teams?.home?.id,
+    awayId: fx.teams?.away?.id,
     home: fx.teams?.home?.name ?? "Local",
     away: fx.teams?.away?.name ?? "Visitante",
-    homeScore: fx.goals?.home ?? 0,
-    awayScore: fx.goals?.away ?? 0,
+    homeScore: fx.goals?.home ?? null,
+    awayScore: fx.goals?.away ?? null,
     homeFlag: fx.teams?.home?.logo ?? "",
     awayFlag: fx.teams?.away?.logo ?? "",
     apiUpdatedAt: Date.now(),
   };
 }
 
-function getStat(stats: FixtureStatistics[], teamName: string, statName: "Total Shots" | "Shots on Goal"): number;
-function getStat(stats: FixtureStatistics[], teamName: string, statName: string): string | number;
-function getStat(stats: FixtureStatistics[], teamName: string, statName: string) {
-  const team = stats.find((s) => s.team?.name === teamName);
-  const stat = team?.statistics?.find((x) => x.type === statName);
-  return stat?.value ?? 0;
-}
-
-function getLiveMinute(match: Match, tick: number) {
-  if (match.half === "HT") return "HT";
-  if (match.half === "FT") return "FT";
-  const secondsPassed = Math.max(0, Math.floor((tick - match.apiUpdatedAt) / 1000));
-  const extraMinutes = Math.floor(secondsPassed / 60);
-  return `${Math.min(match.minuteNumber + extraMinutes, 90)}'`;
+function getLiveMinute(match: Match) {
+  if (["HT", "FT"].includes(match.half)) return match.half;
+  return liveValue(match.minuteNumber, "'");
 }
 
 function eventIcon(type: string) {
@@ -91,6 +77,9 @@ export default function LiveTvDashboard() {
   const [detailsError, setDetailsError] = useState<string | null>(null);
   const [lastUpdate, setLastUpdate] = useState("--:--:--");
   const [detailsId, setDetailsId] = useState<number | null>(null);
+  const [statsCachedAt, setStatsCachedAt] = useState<number | null>(null);
+  const [liveStale, setLiveStale] = useState(false);
+  const [liveCachedAt, setLiveCachedAt] = useState<number | null>(null);
   const fixtureStats = detailsId === selected?.id ? receivedStats : [];
   const fixtureEvents = detailsId === selected?.id ? receivedEvents : [];
 
@@ -111,13 +100,17 @@ export default function LiveTvDashboard() {
         if (!active) return;
 
         if (!res.ok || (data?.errors && Object.keys(data.errors).length > 0) || data?.error || !Array.isArray(data?.response)) {
-          const message = res.status === 429
+          setLiveStale(true);
+        const message = res.status === 429
             ? "Límite de API-Football alcanzado. Espera a que se renueve la cuota."
             : `No se pueden cargar los partidos (HTTP ${res.status}). Comprueba API-Football.`;
           setLiveError(message);
           setLoading(false);
           return;
         }
+        setLiveStale(Boolean(data.stale));
+    setLiveCachedAt(typeof data.cachedAt === "number" ? data.cachedAt : null);
+        setTick(Date.now());
         setLiveError(data.stale ? "La actualización está pendiente o no está disponible; se muestra la última captura válida." : null);
         const liveGames = Array.isArray(data.response)
           ? data.response.map(mapApiFixtureToMatch)
@@ -138,6 +131,7 @@ export default function LiveTvDashboard() {
         setLoading(false);
       } catch (error) {
         if (!active) return;
+        setLiveStale(true);
         console.error("loadLive dashboard", error);
         setLiveError("No se pudo conectar con el servicio de partidos.");
         setLoading(false);
@@ -170,11 +164,14 @@ export default function LiveTvDashboard() {
         });
         const data = await res.json();
         if (!active) return;
-        if (!res.ok || data.error || !Array.isArray(data.statistics) || !Array.isArray(data.events)) {
+        if (!res.ok || data.error || !Array.isArray(data.statistics) || !Array.isArray(data.events) ||
+            (data.fixtureId !== undefined && String(data.fixtureId) !== String(selectedId))) {
           throw new Error("Estadísticas no disponibles temporalmente.");
         }
         setDetailsError(null);
         setDetailsId(selectedId ?? null);
+        setStatsCachedAt(typeof data.cachedAt === "number" ? data.cachedAt : null);
+        setTick(Date.now());
         setFixtureStats(data.statistics);
         setFixtureEvents(data.events);
       } catch {
@@ -215,19 +212,23 @@ export default function LiveTvDashboard() {
     );
   }
 
-  const homeShots = getStat(fixtureStats, selectedMatch.home, "Total Shots");
-  const awayShots = getStat(fixtureStats, selectedMatch.away, "Total Shots");
-  const homeShotsOn = getStat(fixtureStats, selectedMatch.home, "Shots on Goal");
-  const awayShotsOn = getStat(fixtureStats, selectedMatch.away, "Shots on Goal");
-  const homePossession = getStat(fixtureStats, selectedMatch.home, "Ball Possession") || "50%";
-  const awayPossession = getStat(fixtureStats, selectedMatch.away, "Ball Possession") || "50%";
-  const homeXg = getStat(fixtureStats, selectedMatch.home, "expected_goals");
-  const awayXg = getStat(fixtureStats, selectedMatch.away, "expected_goals");
+  const homeShots = getStat(fixtureStats, selectedMatch.homeId ?? selectedMatch.home, "Total Shots");
+  const awayShots = getStat(fixtureStats, selectedMatch.awayId ?? selectedMatch.away, "Total Shots");
+  const homeShotsOn = getStat(fixtureStats, selectedMatch.homeId ?? selectedMatch.home, "Shots on Goal");
+  const awayShotsOn = getStat(fixtureStats, selectedMatch.awayId ?? selectedMatch.away, "Shots on Goal");
+  const homePossession = getStat(fixtureStats, selectedMatch.homeId ?? selectedMatch.home, "Ball Possession");
+  const awayPossession = getStat(fixtureStats, selectedMatch.awayId ?? selectedMatch.away, "Ball Possession");
+  const homeXg = getStat(fixtureStats, selectedMatch.homeId ?? selectedMatch.home, "expected_goals");
+  const awayXg = getStat(fixtureStats, selectedMatch.awayId ?? selectedMatch.away, "expected_goals");
 
   const prediction: Prediction = calculateLivePoisson({
     homeScore: selectedMatch.homeScore,
     awayScore: selectedMatch.awayScore,
-    minuteText: getLiveMinute(selectedMatch, tick),
+    minuteText: selectedMatch.minuteNumber === null ? "" : String(selectedMatch.minuteNumber),
+    status: selectedMatch.half,
+    homeXg, awayXg, stale: liveStale,
+    fixtureAgeSeconds: tick > 0 && typeof liveCachedAt === "number" ? (tick-liveCachedAt)/1000 : null,
+    statisticsAgeSeconds: tick > 0 && typeof statsCachedAt === "number" ? (tick-statsCachedAt)/1000 : null,
     homeShots,
     awayShots,
     homeShotsOn,
@@ -236,18 +237,11 @@ export default function LiveTvDashboard() {
     awayPossession,
   });
 
-  const bttsYes = prediction.bttsYes ?? prediction.btts ?? 0;
-  const bttsNo = prediction.bttsNo ?? 100 - bttsYes;
-
-  const actionText =
-    prediction.irvinScore >= 85 ? "ENTRAR" :
-    prediction.irvinScore >= 65 ? "OBSERVAR" : "NO ENTRAR";
-
-  const riskText =
-    prediction.confidence >= 80 ? "BAJO" :
-    prediction.confidence >= 60 ? "MEDIO" : "SIN VALOR";
-
-  const hasStats = fixtureStats.length > 0;
+  const bttsYes = prediction.bttsYes;
+  const bttsNo = prediction.bttsNo;
+  const actionText = "SIN RECOMENDACIÓN VALIDADA";
+  const riskText = "NO EVALUABLE";
+  const dataQuality = prediction.dataQuality ?? "insuficiente";
 
   return (
     <main className="min-h-[100dvh] xl:h-[100dvh] bg-[#03070b] text-white xl:overflow-hidden p-3">
@@ -269,7 +263,7 @@ export default function LiveTvDashboard() {
 
           <div className="flex items-center justify-center gap-8">
             <Badge value="● EN VIVO" />
-            <Badge value={hasStats ? "MODO PRO" : "MODO BÁSICO"} yellow={!hasStats} />
+            <Badge value={`DATOS: ${dataQuality.toUpperCase()}`} yellow={dataQuality !== "avanzada"} />
             <div className="text-center">
               <div className="text-5xl font-black text-green-400">{matches.length}</div>
               <div className="text-sm font-black text-white/70">PARTIDOS EN VIVO</div>
@@ -303,10 +297,10 @@ export default function LiveTvDashboard() {
                 >
                   <div className="flex justify-between">
                     <div className="text-green-400 font-black text-2xl">
-                      {getLiveMinute(m, tick)}
+                      {getLiveMinute(m)}
                     </div>
                     <div className="font-black text-xl">
-                      {m.homeScore}-{m.awayScore}
+                      {liveValue(m.homeScore)}-{liveValue(m.awayScore)}
                     </div>
                   </div>
 
@@ -321,38 +315,45 @@ export default function LiveTvDashboard() {
             </div>
           </aside>
 
-          <section className="rounded-2xl bg-[#07111c] border border-white/10 p-3 min-h-0 overflow-hidden">
+          <section className="rounded-2xl bg-[#07111c] border border-white/10 p-3 min-h-0 overflow-y-auto">
+            <div className="text-sm text-white/70 mb-2" role="status">
+              Datos del proveedor: marcador, minuto y estadísticas disponibles. xG: estimación del proveedor.
+              <br />Modelo: {prediction.modelStatus ?? "no evaluable"}. Confianza no evaluable.
+              <br />{prediction.aiSummary}
+              <p>Los sucesos cumplidos se muestran según el marcador recibido, sujeto a correcciones.</p>
+              {(prediction.issues ?? []).map((issue) => <p key={issue}>{issue}</p>)}
+            </div>
             <ScoreBoard
               match={selectedMatch}
-              minute={getLiveMinute(selectedMatch, tick)}
+              minute={getLiveMinute(selectedMatch)}
               prediction={prediction}
             />
 
             <div className="grid grid-cols-3 gap-2 mt-3">
-              <MetricCard title="GOLES ESPERADOS (xG)" value={homeXg || awayXg ? `${homeXg} - ${awayXg}` : "xG no disponible"} />
-              <MetricCard title="POSESIÓN" value={`${homePossession} / ${awayPossession}`} />
-              <MetricCard title="TIROS TOTALES" value={`${homeShots} - ${awayShots}`} />
+              <MetricCard title="xG DEL PROVEEDOR" value={`${liveValue(homeXg)} - ${liveValue(awayXg)}`} />
+              <MetricCard title="POSESIÓN" value={`${liveValue(homePossession, "%")} / ${liveValue(awayPossession, "%")}`} />
+              <MetricCard title="TIROS TOTALES" value={`${liveValue(homeShots)} - ${liveValue(awayShots)}`} />
             </div>
 
             <div className="grid grid-cols-3 gap-2 mt-2">
-              <MarketCard title="PRÓXIMO GOL">
+              <MarketCard title="PRÓXIMO GOL · ESTIMACIÓN">
                 <div className="grid grid-cols-3 text-center items-end">
                   <div>
                     <div className="text-green-400 font-black truncate">{selectedMatch.home}</div>
-                    <div className="text-4xl font-black text-green-400">{prediction.nextGoalHome}%</div>
+                    <div className="text-4xl font-black text-green-400">{liveValue(prediction.nextGoalHome, "%")}</div>
                   </div>
                   <div>
                     <div className="text-white/50 font-black">SIN GOL</div>
-                    <div className="text-4xl font-black">{prediction.nextGoalDraw}%</div>
+                    <div className="text-4xl font-black">{liveValue(prediction.nextGoalDraw, "%")}</div>
                   </div>
                   <div>
                     <div className="text-blue-400 font-black truncate">{selectedMatch.away}</div>
-                    <div className="text-4xl font-black text-blue-400">{prediction.nextGoalAway}%</div>
+                    <div className="text-4xl font-black text-blue-400">{liveValue(prediction.nextGoalAway, "%")}</div>
                   </div>
                 </div>
               </MarketCard>
 
-              <MarketCard title="LÍNEA DE GOLES">
+              <MarketCard title="GOLES · ESTIMACIÓN / SUCESO CUMPLIDO">
                 <div className="grid grid-cols-3 text-center">
                   <BigPercent label="+1.5" value={prediction.over15} />
                   <BigPercent label="+2.5" value={prediction.over25} />
@@ -362,9 +363,9 @@ export default function LiveTvDashboard() {
 
               <MarketCard title="1ª MITAD">
                 <div className="grid grid-cols-3 text-center">
-                  <BigPercent label={selectedMatch.home} value={prediction.firstHalfHome ?? 33} />
-                  <BigPercent label="EMPATE" value={prediction.firstHalfDraw ?? 34} />
-                  <BigPercent label={selectedMatch.away} value={prediction.firstHalfAway ?? 33} />
+                  <BigPercent label={selectedMatch.home} value={prediction.firstHalfHomeWin} />
+                  <BigPercent label="EMPATE" value={prediction.firstHalfDraw} />
+                  <BigPercent label={selectedMatch.away} value={prediction.firstHalfAwayWin} />
                 </div>
               </MarketCard>
             </div>
@@ -377,19 +378,19 @@ export default function LiveTvDashboard() {
                 </div>
               </MarketCard>
 
-              <MarketCard title="MOMENTUM">
+              <MarketCard title="ALCANCE DEL MODELO">
                 <div className="text-center text-white/50">
-                  {hasStats ? "Lectura basada en tiros, posesión y marcador" : "Modo básico sin estadísticas avanzadas"}
+                  Estimaciones exploratorias; sin calibración histórica. No se evalúa momentum.
                 </div>
               </MarketCard>
 
               <MarketCard title="CALIDAD DE DATOS">
                 <div className="text-center">
                   <div className="text-4xl font-black text-green-400">
-                    {hasStats ? "ALTA" : "BÁSICA"}
+                    {dataQuality.toUpperCase()}
                   </div>
                   <div className="text-white/40 mt-2">
-                    {hasStats ? "Stats + eventos + marcador" : "Marcador + eventos"}
+                    Cobertura de datos; no equivale a fiabilidad predictiva
                   </div>
                 </div>
               </MarketCard>
@@ -419,9 +420,9 @@ export default function LiveTvDashboard() {
 
               <div className="grid grid-cols-2 gap-3 mt-4">
                 <DecisionBox title="ACCIÓN" value={actionText} />
-                <DecisionBox title="RIESGO" value={riskText} red={riskText === "SIN VALOR"} />
-                <DecisionBox title="CONFIANZA" value={`${prediction.confidence}%`} green />
-                <DecisionBox title="IRVIN SCORE" value={`${prediction.irvinScore}/100`} blue />
+                <DecisionBox title="RIESGO" value={riskText} />
+                <DecisionBox title="CONFIANZA" value="NO EVALUABLE" />
+                <DecisionBox title="IRVIN SCORE" value="NO EVALUABLE" />
               </div>
 
               <div className="mt-4 text-white/50 font-black text-sm">LECTURA DE LA IA</div>
@@ -453,10 +454,10 @@ export default function LiveTvDashboard() {
             </span>
           </div>
           <div className="px-4 flex items-center border-l border-white/10">
-            🔥 IA: {prediction.recommendation} · {actionText} · Confianza {prediction.confidence}%
+            🔥 IA: {prediction.recommendation} · {actionText} · Confianza no evaluable
           </div>
           <div className="px-4 flex items-center border-l border-white/10">
-            📊 {hasStats ? "Estadísticas avanzadas disponibles" : "Estadísticas pendientes o no disponibles"}
+            📊 Datos: {dataQuality}
           </div>
           <div className="px-4 flex items-center justify-center border-l border-white/10 text-green-400">
             LISTA CADA 30 S
@@ -500,7 +501,7 @@ function ScoreBoard({
         <div className="text-center">
           <div className="text-green-400 text-xs font-black">EN VIVO</div>
           <div className="text-6xl font-black mt-1">
-            {match.homeScore} - {match.awayScore}
+            {liveValue(match.homeScore)} - {liveValue(match.awayScore)}
           </div>
           <div className="text-white/50 mt-1">{minute} · {match.half}</div>
         </div>
@@ -508,16 +509,16 @@ function ScoreBoard({
         <TeamBlock side="VISITANTE" logo={match.awayFlag} name={match.away} align="right" />
       </div>
 
-      <div
+      {prediction.homeWin !== null && prediction.homeWin !== undefined ? <div
         className="mt-4 h-6 rounded-lg overflow-hidden grid text-xs font-black text-center"
         style={{
-          gridTemplateColumns: `${Math.max(prediction.homeWin, 1)}fr ${Math.max(prediction.draw, 1)}fr ${Math.max(prediction.awayWin, 1)}fr`,
+          gridTemplateColumns: `${(prediction.homeWin ?? 0)}fr ${(prediction.draw ?? 0)}fr ${(prediction.awayWin ?? 0)}fr`,
         }}
       >
-        <div className="bg-green-500 text-black flex items-center justify-center">{prediction.homeWin}%</div>
-        <div className="bg-slate-500 flex items-center justify-center">{prediction.draw}%</div>
-        <div className="bg-blue-600 flex items-center justify-center">{prediction.awayWin}%</div>
-      </div>
+        <div className="bg-green-500 text-black flex items-center justify-center">{liveValue(prediction.homeWin, "%")}</div>
+        <div className="bg-slate-500 flex items-center justify-center">{liveValue(prediction.draw, "%")}</div>
+        <div className="bg-blue-600 flex items-center justify-center">{liveValue(prediction.awayWin, "%")}</div>
+      </div> : <p className="text-center mt-4">Resultado: no evaluable</p>}
     </div>
   );
 }
@@ -578,7 +579,7 @@ function BigPercent({
   red,
 }: {
   label: string;
-  value: React.ReactNode;
+  value: number | null;
   green?: boolean;
   red?: boolean;
 }) {
@@ -586,7 +587,7 @@ function BigPercent({
     <div>
       <div className="text-white/50 text-sm font-black truncate">{label}</div>
       <div className={`text-4xl font-black ${green ? "text-green-400" : red ? "text-red-400" : ""}`}>
-        {value}%
+        {liveValue(value, "%")}
       </div>
     </div>
   );

@@ -1,402 +1,156 @@
 export type LivePoissonInput = {
-  homeScore: number;
-  awayScore: number;
+  homeScore: number | null;
+  awayScore: number | null;
   minuteText: string;
-  homeShots: number;
-  awayShots: number;
-  homeShotsOn: number;
-  awayShotsOn: number;
-  homePossession: string | number;
-  awayPossession: string | number;
+  status?: string;
+  homeShots?: number | null;
+  awayShots?: number | null;
+  homeShotsOn?: number | null;
+  awayShotsOn?: number | null;
+  homePossession?: string | number | null;
+  awayPossession?: string | number | null;
+  homeXg?: number | null;
+  awayXg?: number | null;
+  statisticsAgeSeconds?: number | null;
+  fixtureAgeSeconds?: number | null;
+  stale?: boolean;
 };
-
+export type DataQuality = "insuficiente" | "básica" | "intermedia" | "avanzada";
+type Probability = number | null;
 export type LivePoissonResult = {
-  homeWin: number;
-  draw: number;
-  awayWin: number;
-
-  over15: number;
-  over25: number;
-  over35: number;
-
-  bttsYes: number;
-  bttsNo: number;
-
-  nextGoalHome: number;
-  nextGoalDraw: number;
-  nextGoalAway: number;
-
-  firstHalfHomeWin: number;
-  firstHalfDraw: number;
-  firstHalfAwayWin: number;
-
-  firstHalfXgHome: number;
-  firstHalfXgAway: number;
-  totalExpectedGoals: number;
-
-  recommendation: string;
-  confidence: number;
-  irvinScore: number;
-  aiDecisions: string[];
-
-  aiSummary: string;
-  dangerIndex: number;
-  valueLevel: "SIN VALOR" | "BAJO" | "MEDIO" | "ALTO" | "MUY ALTO";
-  next10Goal: number;
-  next10Corner: number;
-  next10Card: number;
+  homeWin: Probability; draw: Probability; awayWin: Probability;
+  over15: Probability; over25: Probability; over35: Probability;
+  bttsYes: Probability; bttsNo: Probability;
+  nextGoalHome: Probability; nextGoalDraw: Probability; nextGoalAway: Probability;
+  firstHalfHomeWin: Probability; firstHalfDraw: Probability; firstHalfAwayWin: Probability;
+  firstHalfXgHome: Probability; firstHalfXgAway: Probability; totalExpectedGoals: Probability;
+  confidence: null; irvinScore: null; dangerIndex: null;
+  next10Goal: Probability; next10Corner: null; next10Card: null;
+  recommendation: string; valueLevel: "NO EVALUABLE"; aiSummary: string; aiDecisions: string[];
+  dataQuality: DataQuality; missingMetrics: string[]; issues: string[];
+  modelStatus: "no evaluable" | "estimación no calibrada" | "resultado observado";
+  settled: string[];
 };
 
-function parseMinute(minuteText: string) {
-  const n = Number(String(minuteText).replace("'", ""));
-  return Number.isFinite(n) ? Math.max(1, Math.min(90, n)) : 1;
+function number(value: unknown, max = Infinity, allowPercent = false): number | null {
+  if (typeof value !== "number" && typeof value !== "string") return null;
+  if (typeof value === "string" && !(allowPercent ? /^\d+(\.\d+)?%?$/ : /^\d+(\.\d+)?$/).test(value.trim())) return null;
+  const n = typeof value === "number" ? value : Number(value.trim().replace(/%$/, ""));
+  return Number.isFinite(n) && n >= 0 && n <= max ? n : null;
+}
+function count(value: unknown) {
+  const n = number(value);
+  return n !== null && Number.isSafeInteger(n) ? n : null;
 }
 
-function parsePercent(value: string | number) {
-  if (typeof value === "number") return value;
-  const n = Number(value.replace("%", ""));
-  return Number.isFinite(n) ? n : 50;
+// Largest remainder rounding preserves a total of exactly 10000 basis points.
+function percentages(weights: number[]) {
+  const total = weights.reduce((sum, value) => sum + value, 0);
+  const exact = weights.map(value => value / total * 10000);
+  const units = exact.map(Math.floor);
+  const order = exact.map((value, index) => ({index, remainder: value - units[index]})).sort((a,b) => b.remainder - a.remainder);
+  const left = 10000 - units.reduce((sum, value) => sum + value, 0);
+  for (let i = 0; i < left; i++) units[order[i].index]++;
+  return units.map(value => value / 100);
 }
-
-function clamp(n: number, min = 1, max = 98) {
-  return Math.max(min, Math.min(max, n));
+function binary(p: number) { return percentages([Math.max(0, Math.min(1, p)), Math.max(0, Math.min(1, 1-p))]); }
+function poisson(lambda: number) {
+  const mass = [Math.exp(-lambda)];
+  let sum = mass[0];
+  for (let k = 1; 1-sum > 1e-12 && k < 256; k++) {mass.push(mass[k-1] * lambda/k); sum += mass[k];}
+  return mass.map(value => value/sum);
 }
-
-function valueLevelFromScore(score: number): LivePoissonResult["valueLevel"] {
-  if (score >= 88) return "MUY ALTO";
-  if (score >= 75) return "ALTO";
-  if (score >= 62) return "MEDIO";
-  if (score >= 48) return "BAJO";
-  return "SIN VALOR";
+function resultProbabilities(home: number, away: number, homeLambda: number, awayLambda: number) {
+  const outcomes = [0,0,0];
+  const homeMass = poisson(homeLambda), awayMass = poisson(awayLambda);
+  homeMass.forEach((hp,h) => awayMass.forEach((ap,a) => {outcomes[home+h > away+a ? 0 : home+h === away+a ? 1 : 2] += hp*ap;}));
+  return percentages(outcomes);
 }
 
 export function calculateLivePoisson(input: LivePoissonInput): LivePoissonResult {
-  const minute = parseMinute(input.minuteText);
-  const remaining = Math.max(1, 90 - minute);
-  const firstHalfRemaining = Math.max(0, 45 - minute);
-
-  const currentGoals = input.homeScore + input.awayScore;
-  const totalShots = input.homeShots + input.awayShots;
-  const totalShotsOn = input.homeShotsOn + input.awayShotsOn;
-  const hasAdvancedStats = totalShots > 0 || totalShotsOn > 0;
-
-  const homePoss = parsePercent(input.homePossession);
-  const awayPoss = parsePercent(input.awayPossession);
-
-  const homePressure =
-    input.homeShots * 0.75 +
-    input.homeShotsOn * 1.6 +
-    homePoss * 0.03 +
-    input.homeScore * 1.4;
-
-  const awayPressure =
-    input.awayShots * 0.75 +
-    input.awayShotsOn * 1.6 +
-    awayPoss * 0.03 +
-    input.awayScore * 1.4;
-
-  const totalPressure = Math.max(1, homePressure + awayPressure);
-  const homeStrength = homePressure / totalPressure;
-  const awayStrength = awayPressure / totalPressure;
-  const scoreDiff = input.homeScore - input.awayScore;
-
-  let homeWin =
-    33 +
-    homeStrength * 35 -
-    awayStrength * 15 +
-    scoreDiff * (minute > 60 ? 18 : 12);
-
-  let awayWin =
-    33 +
-    awayStrength * 35 -
-    homeStrength * 15 -
-    scoreDiff * (minute > 60 ? 18 : 12);
-
-  let draw = 100 - homeWin - awayWin;
-
-  homeWin = clamp(homeWin, 1, 95);
-  awayWin = clamp(awayWin, 1, 95);
-  draw = clamp(draw, 1, 95);
-
-  if (scoreDiff >= 4 && minute > 55) {
-    homeWin = 95;
-    draw = 3;
-    awayWin = 2;
-  }
-
-  if (scoreDiff <= -4 && minute > 55) {
-    homeWin = 2;
-    draw = 3;
-    awayWin = 95;
-  }
-
-  const total = homeWin + draw + awayWin;
-
-  homeWin = Math.round((homeWin / total) * 100);
-  draw = Math.round((draw / total) * 100);
-  awayWin = 100 - homeWin - draw;
-
-  const tempo =
-    (input.homeShots +
-      input.awayShots +
-      input.homeShotsOn * 2 +
-      input.awayShotsOn * 2) /
-    Math.max(1, minute);
-
-  const homeTempo =
-    (input.homeShots + input.homeShotsOn * 2 + homePoss * 0.03) /
-    Math.max(1, minute);
-
-  const awayTempo =
-    (input.awayShots + input.awayShotsOn * 2 + awayPoss * 0.03) /
-    Math.max(1, minute);
-
-  const projectedHomeGoals = input.homeScore + homeTempo * remaining * 0.12;
-  const projectedAwayGoals = input.awayScore + awayTempo * remaining * 0.12;
-
-  const totalExpectedGoals = Number(
-    (projectedHomeGoals + projectedAwayGoals).toFixed(2)
-  );
-
-  const firstHalfXgHome =
-    minute <= 45
-      ? Number((homeTempo * firstHalfRemaining * 0.12).toFixed(2))
-      : 0;
-
-  const firstHalfXgAway =
-    minute <= 45
-      ? Number((awayTempo * firstHalfRemaining * 0.12).toFixed(2))
-      : 0;
-
-  const firstHalfDiff = input.homeScore - input.awayScore;
-
-  let firstHalfHomeWin =
-    minute > 45
-      ? input.homeScore > input.awayScore
-        ? 95
-        : 2
-      : 30 + homeStrength * 35 + firstHalfDiff * 20;
-
-  let firstHalfAwayWin =
-    minute > 45
-      ? input.awayScore > input.homeScore
-        ? 95
-        : 2
-      : 30 + awayStrength * 35 - firstHalfDiff * 20;
-
-  let firstHalfDraw =
-    minute > 45
-      ? input.homeScore === input.awayScore
-        ? 95
-        : 3
-      : 100 - firstHalfHomeWin - firstHalfAwayWin;
-
-  if (firstHalfDraw < 8 && minute <= 45) firstHalfDraw = 8;
-
-  const firstHalfTotal = firstHalfHomeWin + firstHalfDraw + firstHalfAwayWin;
-
-  firstHalfHomeWin = Math.round((firstHalfHomeWin / firstHalfTotal) * 100);
-  firstHalfDraw = Math.round((firstHalfDraw / firstHalfTotal) * 100);
-  firstHalfAwayWin = 100 - firstHalfHomeWin - firstHalfDraw;
-
-  const goalExpectation = currentGoals + tempo * remaining * 0.18;
-
-  let over15 = clamp(Math.round(goalExpectation * 35 + currentGoals * 15), 5, 95);
-  let over25 = clamp(Math.round(goalExpectation * 26 + currentGoals * 10 - 10), 3, 92);
-  let over35 = clamp(Math.round(goalExpectation * 18 + currentGoals * 7 - 18), 2, 85);
-
-  if (!hasAdvancedStats && currentGoals === 0) {
-    over15 = clamp(over15 - 10, 5, 85);
-    over25 = clamp(over25 - 12, 3, 75);
-    over35 = clamp(over35 - 10, 2, 60);
-  }
-
-  if (!hasAdvancedStats && currentGoals >= 1) {
-    over15 = clamp(over15 + 10, 5, 95);
-    over25 = clamp(over25 + 6, 3, 92);
-  }
-
-  const bttsBase =
-    input.homeScore > 0 && input.awayScore > 0
-      ? 92
-      : input.homeScore > 0 || input.awayScore > 0
-      ? 48 + Math.round(Math.min(homePressure, awayPressure) * 4)
-      : 35 + Math.round(Math.min(homePressure, awayPressure) * 3);
-
-  const bttsYes = clamp(bttsBase, 8, 94);
-  const bttsNo = 100 - bttsYes;
-
-  const nextGoalHome = clamp(Math.round(homeStrength * 70 + 10), 5, 80);
-  const nextGoalAway = clamp(Math.round(awayStrength * 70 + 10), 5, 80);
-  const nextGoalDraw = Math.max(5, 100 - nextGoalHome - nextGoalAway);
-
-  const dangerIndex = clamp(
-    Math.round(
-      tempo * 120 +
-        totalShotsOn * 7 +
-        totalShots * 2.5 +
-        currentGoals * 8 +
-        (minute > 60 ? 8 : 0)
-    ),
-    1,
-    100
-  );
-
-  const next10Goal = clamp(
-    Math.round(dangerIndex * 0.55 + Math.max(nextGoalHome, nextGoalAway) * 0.35),
-    5,
-    88
-  );
-
-  const next10Corner = clamp(
-    Math.round(totalShots * 4 + tempo * 80 + (hasAdvancedStats ? 10 : 0)),
-    5,
-    82
-  );
-
-  const next10Card = clamp(
-    Math.round(12 + minute * 0.18 + (scoreDiff !== 0 ? 8 : 0)),
-    5,
-    72
-  );
-
-  let recommendation = "ESPERAR";
-  let confidence = 55;
-
-  if (over15 >= 72 && dangerIndex >= 45) {
-    recommendation = "OVER 1.5 GOLES";
-    confidence = Math.max(over15, dangerIndex);
-  }
-
-  if (over25 >= 70 && dangerIndex >= 58) {
-    recommendation = "OVER 2.5 GOLES";
-    confidence = Math.max(over25, dangerIndex);
-  }
-
-  if (over35 >= 68 && dangerIndex >= 70) {
-    recommendation = "OVER 3.5 GOLES";
-    confidence = Math.max(over35, dangerIndex);
-  }
-
-  if (minute <= 45 && firstHalfXgHome + firstHalfXgAway >= 0.65) {
-    recommendation = "GOL 1ª MITAD";
-    confidence = clamp(
-      Math.round((firstHalfXgHome + firstHalfXgAway) * 80),
-      55,
-      88
-    );
-  }
-
-  if (minute > 70 && currentGoals <= 1 && dangerIndex < 45) {
-    recommendation = "UNDER 2.5 GOLES";
-    confidence = clamp(88 - currentGoals * 10, 60, 92);
-  }
-
-  let irvinScore = 35;
-
-  irvinScore += confidence * 0.18;
-  irvinScore += Math.abs(homeWin - awayWin) * 0.16;
-  irvinScore += over25 * 0.1;
-  irvinScore += over35 * 0.06;
-  irvinScore += Math.max(nextGoalHome, nextGoalAway) * 0.08;
-  irvinScore += bttsYes * 0.05;
-  irvinScore += dangerIndex * 0.14;
-  irvinScore += Math.min(currentGoals, 5) * 3;
-
-  if (minute < 20) irvinScore -= 12;
-  if (minute < 10) irvinScore -= 8;
-  if (!hasAdvancedStats && currentGoals === 0) irvinScore -= 12;
-  if (!hasAdvancedStats && currentGoals > 0) irvinScore -= 4;
-
-  irvinScore = Math.round(clamp(irvinScore, 0, 97));
-
-  const valueLevel = valueLevelFromScore(irvinScore);
-  const aiDecisions: string[] = [];
-
-  if (!hasAdvancedStats) {
-    aiDecisions.push("🟡 Modo básico: la liga no entrega tiros ni xG avanzados.");
-  }
-
-  if (dangerIndex >= 75) {
-    aiDecisions.push("🔥 Peligro alto de gol: el partido tiene señales ofensivas fuertes.");
-  } else if (dangerIndex >= 50) {
-    aiDecisions.push("🟡 Peligro medio: hay actividad, pero falta confirmación.");
-  } else {
-    aiDecisions.push("⚪ Peligro bajo: no hay suficiente presión ofensiva.");
-  }
-
-  if (over15 >= 70) {
-    aiDecisions.push("🟢 Over 1.5 tiene buena proyección.");
-  } else {
-    aiDecisions.push("⚪ Over 1.5 todavía no tiene fuerza suficiente.");
-  }
-
-  if (over25 >= 65 && dangerIndex >= 55) {
-    aiDecisions.push("🔥 Over 2.5 puede tener valor si el ritmo continúa.");
-  } else {
-    aiDecisions.push("🚫 Evitar Over 2.5 por ahora.");
-  }
-
-  if (nextGoalDraw >= 65) {
-    aiDecisions.push("⏳ Alta probabilidad de que no haya gol inmediato.");
-  } else if (nextGoalHome > nextGoalAway) {
-    aiDecisions.push("🟢 Próximo gol más probable: local.");
-  } else {
-    aiDecisions.push("🔵 Próximo gol más probable: visitante.");
-  }
-
-  if (bttsYes >= 60) {
-    aiDecisions.push("🟢 Ambos anotan tiene valor estadístico.");
-  } else {
-    aiDecisions.push("🔴 Ambos anotan no es fuerte ahora.");
-  }
-
-  aiDecisions.push(`⚽ Próximos 10 minutos: gol ${next10Goal}%.`);
-  aiDecisions.push(`🚩 Próximos 10 minutos: córner ${next10Corner}%.`);
-  aiDecisions.push(`🟨 Próximos 10 minutos: tarjeta ${next10Card}%.`);
-
-  if (irvinScore >= 85) {
-    aiDecisions.push("💎 Señal fuerte: oportunidad clara.");
-  } else if (irvinScore >= 65) {
-    aiDecisions.push("🟡 Señal moderada: entrar con cautela.");
-  } else {
-    aiDecisions.push("⚠️ Mejor esperar confirmación.");
-  }
-
-  const aiSummary =
-    recommendation === "ESPERAR"
-      ? hasAdvancedStats
-        ? `La IA recomienda esperar porque el partido todavía no muestra suficiente valor. El peligro de gol está en ${dangerIndex}/100 y el nivel de valor es ${valueLevel}.`
-        : `La IA recomienda esperar porque esta liga está en modo básico. La lectura se basa en marcador, minuto y eventos, con peligro estimado de ${dangerIndex}/100.`
-      : `La IA recomienda ${recommendation} con confianza ${confidence}%. El peligro de gol está en ${dangerIndex}/100 y el nivel de valor detectado es ${valueLevel}.`;
-
-  return {
-    homeWin,
-    draw,
-    awayWin,
-    over15,
-    over25,
-    over35,
-    bttsYes,
-    bttsNo,
-    nextGoalHome,
-    nextGoalDraw,
-    nextGoalAway,
-    firstHalfHomeWin,
-    firstHalfDraw,
-    firstHalfAwayWin,
-    firstHalfXgHome,
-    firstHalfXgAway,
-    totalExpectedGoals,
-    recommendation,
-    confidence,
-    irvinScore,
-    aiDecisions,
-    aiSummary,
-    dangerIndex,
-    valueLevel,
-    next10Goal,
-    next10Corner,
-    next10Card,
+  const home = count(input.homeScore), away = count(input.awayScore);
+  const status = input.status ?? input.minuteText;
+  const minute = status === "HT" ? 45 : status === "FT" ? 90 : number(input.minuteText.replace(/'$/, ""), 90);
+  const supported = ["1H","HT","2H","FT"].includes(status) &&
+    (status !== "1H" || (minute !== null && minute <= 45)) &&
+    (status !== "2H" || (minute !== null && minute >= 45));
+  const fixtureFresh = typeof input.fixtureAgeSeconds === "number" && Number.isFinite(input.fixtureAgeSeconds) && input.fixtureAgeSeconds >= 0 && input.fixtureAgeSeconds <= 300;
+  const base = fixtureFresh && home !== null && away !== null && minute !== null && supported && !input.stale;
+  const metrics = {
+    homeShots: count(input.homeShots), awayShots: count(input.awayShots),
+    homeShotsOn: count(input.homeShotsOn), awayShotsOn: count(input.awayShotsOn),
+    homePossession: number(input.homePossession, 100, true), awayPossession: number(input.awayPossession, 100, true),
+    homeXg: number(input.homeXg), awayXg: number(input.awayXg),
   };
+  const missingMetrics = Object.entries(metrics).filter(([,value]) => value === null).map(([key]) => key);
+  const issues: string[] = [];
+  if (!base) issues.push("Marcador, minuto o estado insuficiente, no compatible o captura desactualizada.");
+  for (const side of ["home","away"] as const) {
+    const shots = metrics[`${side}Shots`], on = metrics[`${side}ShotsOn`];
+    const xg = metrics[`${side}Xg`];
+    if (shots !== null && xg !== null && xg > shots + 1e-6) issues.push("xG incompatible con los tiros totales recibidos.");
+    if (shots !== null && on !== null && on > shots) issues.push("Los tiros a puerta superan los tiros totales.");
+  }
+  if (metrics.homePossession !== null && metrics.awayPossession !== null && Math.abs(metrics.homePossession + metrics.awayPossession - 100) > 1) issues.push("Posesión incoherente entre equipos.");
+  const fresh = typeof input.statisticsAgeSeconds === "number" && Number.isFinite(input.statisticsAgeSeconds) && input.statisticsAgeSeconds >= 0 && input.statisticsAgeSeconds <= 600;
+  if (fresh && fixtureFresh && Math.abs(input.statisticsAgeSeconds! - input.fixtureAgeSeconds!) > 60) issues.push("Las capturas del marcador y las estadísticas están separadas por más de un minuto.");
+  if (!fresh) issues.push("Antigüedad de las estadísticas desconocida o superior a diez minutos.");
+  const quality: DataQuality = !base ? "insuficiente" : missingMetrics.length === 8 ? "básica" : !missingMetrics.length && !issues.length ? "avanzada" : "intermedia";
+  const result: LivePoissonResult = {
+    homeWin:null,draw:null,awayWin:null,over15:null,over25:null,over35:null,bttsYes:null,bttsNo:null,
+    nextGoalHome:null,nextGoalDraw:null,nextGoalAway:null,firstHalfHomeWin:null,firstHalfDraw:null,firstHalfAwayWin:null,
+    firstHalfXgHome:null,firstHalfXgAway:null,totalExpectedGoals:null,confidence:null,irvinScore:null,dangerIndex:null,
+    next10Goal:null,next10Corner:null,next10Card:null,recommendation:"SIN RECOMENDACIÓN VALIDADA",valueLevel:"NO EVALUABLE",
+    aiSummary:"Confianza no evaluable: falta validación histórica fuera de muestra.", aiDecisions:[],
+    dataQuality:quality,missingMetrics,issues,modelStatus:"no evaluable",settled:[],
+  };
+  if (!base || home === null || away === null || minute === null) return result;
+  const goals = home+away;
+  for (const [key, threshold] of [["over15",1.5],["over25",2.5],["over35",3.5]] as const) {
+    if (goals > threshold || status === "FT") {result[key] = goals > threshold ? 100 : 0; result.settled.push(key);}
+  }
+  if ((home > 0 && away > 0) || status === "FT") {
+    result.bttsYes = home > 0 && away > 0 ? 100 : 0; result.bttsNo = 100-result.bttsYes; result.settled.push("btts");
+  }
+  if (status === "HT") {
+    [result.firstHalfHomeWin,result.firstHalfDraw,result.firstHalfAwayWin] = home > away ? [100,0,0] : home === away ? [0,100,0] : [0,0,100];
+    result.settled.push("firstHalf");
+  }
+  if (status === "FT") {
+    [result.homeWin,result.draw,result.awayWin] = home > away ? [100,0,0] : home === away ? [0,100,0] : [0,0,100];
+    [result.nextGoalHome,result.nextGoalDraw,result.nextGoalAway] = [0,100,0];
+    result.modelStatus = "resultado observado"; result.settled.push("result","nextGoal"); return result;
+  }
+  // Phase 1 uses no invented shot-to-goal weights or historical priors. Zero observed xG is not a zero future rate.
+  if (quality !== "avanzada" || minute < 15 || minute >= 90 || !metrics.homeXg || !metrics.awayXg) {
+    result.issues.push("No se estima sin cobertura completa, xG positivos de ambos equipos y al menos 15 minutos reglamentarios.");
+    return result;
+  }
+  const remaining = 90-minute;
+  const homeRate = metrics.homeXg/minute, awayRate = metrics.awayXg/minute;
+  const hl = homeRate*remaining, al = awayRate*remaining, lambda = hl+al;
+  if (!Number.isFinite(lambda) || lambda <= 0 || lambda > 20) {result.issues.push("Intensidad fuera del dominio numérico admitido."); return result;}
+  result.modelStatus = "estimación no calibrada";
+  [result.homeWin,result.draw,result.awayWin] = resultProbabilities(home,away,hl,al);
+  const mass = poisson(lambda);
+  for (const [key,threshold] of [["over15",1.5],["over25",2.5],["over35",3.5]] as const) {
+    result[key] = binary(1-mass.slice(0,Math.max(0,Math.floor(threshold)-goals+1)).reduce((sum,p)=>sum+p,0))[0];
+  }
+  const yes = (home > 0 ? 1 : 1-Math.exp(-hl)) * (away > 0 ? 1 : 1-Math.exp(-al));
+  [result.bttsYes,result.bttsNo] = binary(yes);
+  const noGoal = Math.exp(-lambda);
+  [result.nextGoalHome,result.nextGoalDraw,result.nextGoalAway] = percentages([(1-noGoal)*hl/lambda,noGoal,(1-noGoal)*al/lambda]);
+  result.next10Goal = binary(1-Math.exp(-(homeRate+awayRate)*Math.min(10,remaining)))[0];
+  result.totalExpectedGoals = Number((goals+lambda).toFixed(3));
+  if (minute < 45) {
+    const firstHome = homeRate*(45-minute), firstAway = awayRate*(45-minute);
+    [result.firstHalfHomeWin,result.firstHalfDraw,result.firstHalfAwayWin] = resultProbabilities(home,away,firstHome,firstAway);
+    result.firstHalfXgHome = firstHome; result.firstHalfXgAway = firstAway;
+  }
+  result.aiDecisions = ["Estimación exploratoria Poisson a 90 minutos; excluye añadido y prórroga.",
+    "Supone independencia y ritmo futuro constante a partir del xG acumulado del proveedor.",
+    "Calidad de datos avanzada no significa confianza predictiva alta.",
+    "Sin calibración histórica no se evalúan confianza, valor, riesgo, córners ni tarjetas."];
+  result.aiSummary = "Probabilidades estimadas, no calibradas. Confianza no evaluable. Los xG del proveedor son estimaciones de su propio modelo.";
+  return result;
 }

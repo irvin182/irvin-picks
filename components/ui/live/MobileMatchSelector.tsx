@@ -1,17 +1,19 @@
 "use client";
 
+import { liveValue } from "@/lib/liveData";
+
 type Match = {
   id: number;
   minute: string;
-  minuteNumber: number;
+  minuteNumber: number | null;
   half: string;
   league: string;
   country: string;
   leagueLogo: string;
   home: string;
   away: string;
-  homeScore: number;
-  awayScore: number;
+  homeScore: number | null;
+  awayScore: number | null;
   homeFlag: string;
   awayFlag: string;
   apiUpdatedAt: number;
@@ -57,7 +59,7 @@ export default function MobileMatchSelector({
                 {getLiveMinute(m, tick)}
               </span>
               <span className="font-black">
-                {m.homeScore}-{m.awayScore}
+                {liveValue(m.homeScore)}-{liveValue(m.awayScore)}
               </span>
             </div>
 

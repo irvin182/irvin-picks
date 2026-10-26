@@ -52,10 +52,10 @@ test('Redis unavailable fails closed', async()=>{
   const budget=load('lib/apiFootballBudget.ts',{'@/lib/apiFootballRedis':{getApiFootballRedis:()=>{throw new Error('offline')}}});
   assert.equal(await budget.reserveApiFootballRequest(),false);
 });
-test('live prediction model returns finite probabilities without network',()=>{
+test('live prediction model abstains without xG and retains no artificial confidence',()=>{
   const {calculateLivePoisson}=load('lib/livePoisson.ts');
   const result=calculateLivePoisson({homeScore:1,awayScore:0,minuteText:'65',homeShots:10,awayShots:7,homeShotsOn:4,awayShotsOn:2,homePossession:'55%',awayPossession:'45%'});
-  for(const key of ['homeWin','draw','awayWin','over25','bttsYes']) assert.ok(Number.isFinite(result[key])&&result[key]>=0&&result[key]<=100,key);
+  for(const key of ['homeWin','draw','awayWin','over25','bttsYes','confidence']) assert.equal(result[key],null,key);
 });
 const next = {NextResponse:{json:(data,init)=>Response.json(data,init),redirect:url=>new Response(null,{status:307,headers:{location:url}})}};
 test('protected proxy rejects unauthorized, expired and replaced subscriptions; admits legitimate endpoints',async()=>{

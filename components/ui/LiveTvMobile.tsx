@@ -1,29 +1,37 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { calculateLivePoisson } from "@/lib/livePoisson";
+import { readLiveStat as getStat, liveValue, type FixtureStatistics } from "@/lib/liveData";
 import LiveMobileHeader from "./live/LiveMobileHeader";
 import MobileMatchSelector from "./live/MobileMatchSelector";
 
 type Match = {
   id: number;
   minute: string;
-  minuteNumber: number;
+  minuteNumber: number | null;
   half: string;
   league: string;
   country: string;
   leagueLogo: string;
   home: string;
   away: string;
-  homeScore: number;
-  awayScore: number;
+  homeScore: number | null;
+  awayScore: number | null;
   homeFlag: string;
   awayFlag: string;
   apiUpdatedAt: number;
 };
 const SELECTED_MATCH_STORAGE_KEY = "irvin_analytics_selected_match_id";
-function mapApiFixtureToMatch(fx: any): Match {
-  const elapsed = fx.fixture?.status?.elapsed ?? 0;
+type ApiFixture = {
+  fixture: {id: number; status?: {elapsed?: number | null; short?: string}};
+  league?: {name?: string; country?: string; logo?: string};
+  teams?: {home?: {name?: string; logo?: string}; away?: {name?: string; logo?: string}};
+  goals?: {home?: number | null; away?: number | null};
+};
+type FixtureEvent = {type: string; time?: {elapsed?: number}; player?: {name?: string}; team?: {name?: string}};
+function mapApiFixtureToMatch(fx: ApiFixture): Match {
+  const elapsed = fx.fixture?.status?.elapsed ?? null;
   const short = fx.fixture?.status?.short ?? "LIVE";
 
   return {
@@ -36,22 +44,12 @@ function mapApiFixtureToMatch(fx: any): Match {
     leagueLogo: fx.league?.logo ?? "",
     home: fx.teams?.home?.name ?? "Local",
     away: fx.teams?.away?.name ?? "Visitante",
-    homeScore: fx.goals?.home ?? 0,
-    awayScore: fx.goals?.away ?? 0,
+    homeScore: fx.goals?.home ?? null,
+    awayScore: fx.goals?.away ?? null,
     homeFlag: fx.teams?.home?.logo ?? "",
     awayFlag: fx.teams?.away?.logo ?? "",
     apiUpdatedAt: Date.now(),
   };
-}
-
-function getStat(stats: any[], teamName: string, statName: string) {
-  const team = stats.find((s) => s.team?.name === teamName);
-  const stat = team?.statistics?.find((x: any) => x.type === statName);
-  return stat?.value ?? 0;
-}
-
-function toNumber(value: any) {
-  return Number(String(value).replace("%", "")) || 0;
 }
 
 function eventIcon(type: string) {
@@ -61,15 +59,8 @@ function eventIcon(type: string) {
   return "•";
 }
 
-function getLiveMinute(match: Match, tick: number) {
-  if (match.half === "HT") return "HT";
-  if (match.half === "FT") return "FT";
-
-  const secondsPassed = Math.floor((tick - match.apiUpdatedAt) / 1000);
-  const extraMinutes = Math.floor(secondsPassed / 60);
-  const liveMinute = Math.min(match.minuteNumber + extraMinutes, 90);
-
-  return `${liveMinute}'`;
+function getLiveMinute(match: Match) {
+  return ["HT", "FT"].includes(match.half) ? match.half : liveValue(match.minuteNumber, "'");
 }
 
 function countryFlag(country: string) {
@@ -96,10 +87,17 @@ function countryFlag(country: string) {
 export default function LiveTvMobile() {
   const [matches, setMatches] = useState<Match[]>([]);
   const [selected, setSelected] = useState<Match | null>(null);
-  const [fixtureStats, setFixtureStats] = useState<any[]>([]);
-  const [fixtureEvents, setFixtureEvents] = useState<any[]>([]);
+  const [receivedStats, setFixtureStats] = useState<FixtureStatistics[]>([]);
+  const [receivedEvents, setFixtureEvents] = useState<FixtureEvent[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tick, setTick] = useState(Date.now());
+  const [tick, setTick] = useState(0);
+  const [statsCachedAt, setStatsCachedAt] = useState<number | null>(null);
+  const [detailsOwner, setDetailsOwner] = useState<number | null>(null);
+  const [liveStale, setLiveStale] = useState(false);
+  const [liveCachedAt, setLiveCachedAt] = useState<number | null>(null);
+  const detailsGeneration = useRef({version: 0});
+  const fixtureStats = detailsOwner === selected?.id ? receivedStats : [];
+  const fixtureEvents = detailsOwner === selected?.id ? receivedEvents : [];
 
   useEffect(() => {
     const timer = setInterval(() => setTick(Date.now()), 30000);
@@ -108,16 +106,16 @@ export default function LiveTvMobile() {
 
 async function loadLive() {
   try {
-    setLoading(true);
-    setFixtureStats([]);
-    setFixtureEvents([]);
-
     const res = await fetch(`/api/live?t=${Date.now()}`, {
       cache: "no-store",
     });
 
     const data = await res.json();
+    if (!res.ok || data.error || !Array.isArray(data.response)) throw new Error("Partidos no disponibles");
 
+    setLiveStale(Boolean(data.stale));
+    setLiveCachedAt(typeof data.cachedAt === "number" ? data.cachedAt : null);
+    setTick(Date.now());
     const liveGames = Array.isArray(data.response)
       ? data.response.map(mapApiFixtureToMatch)
       : [];
@@ -151,75 +149,69 @@ async function loadLive() {
 
     setLoading(false);
   } catch (error) {
+    setLiveStale(true);
     console.error("loadLive", error);
     setLoading(false);
   }
 }
 
 useEffect(() => {
-  loadLive();
+  const initial = setTimeout(loadLive, 0);
   const interval = setInterval(loadLive, 30000);
-  return () => clearInterval(interval);
+  return () => { clearTimeout(initial); clearInterval(interval); };
 }, []);
 
 
-async function handleManualRefresh() {
-  await loadLive();
+  const requestDetails = useCallback(async (id: number, signal?: AbortSignal) => {
+    const generation = ++detailsGeneration.current.version;
+    try {
+      const res = await fetch(`/api/fixture?id=${id}`, {cache: "no-store", signal});
+      const data = await res.json();
+      if (generation !== detailsGeneration.current.version || signal?.aborted) return;
+      if (!res.ok || data.error || !Array.isArray(data.statistics) || !Array.isArray(data.events) ||
+          (data.fixtureId !== undefined && String(data.fixtureId) !== String(id))) {
+        throw new Error("Estadísticas no disponibles");
+      }
+      setDetailsOwner(id);
+      setStatsCachedAt(typeof data.cachedAt === "number" ? data.cachedAt : null);
+      setTick(Date.now());
+      setFixtureStats(data.statistics);
+      setFixtureEvents(data.events);
+    } catch {
+      if (generation !== detailsGeneration.current.version || signal?.aborted) return;
+      setStatsCachedAt(null);
+      setFixtureStats([]);
+      setFixtureEvents([]);
+    }
+  }, []);
 
-  const currentId =
-    selected?.id ??
-    Number(localStorage.getItem(SELECTED_MATCH_STORAGE_KEY));
+  async function handleManualRefresh() {
+    await loadLive();
+    const currentId = selected?.id ?? Number(localStorage.getItem(SELECTED_MATCH_STORAGE_KEY));
+    if (currentId) await requestDetails(currentId);
+  }
 
-  if (!currentId) return;
+  const selectedId = selected?.id;
+  useEffect(() => {
+    if (!selectedId) return;
+    const controller = new AbortController();
+    const generation = detailsGeneration.current;
+    const initial = setTimeout(() => { void requestDetails(selectedId, controller.signal); }, 0);
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") void requestDetails(selectedId, controller.signal);
+    }, 300000);
+    return () => { generation.version++; controller.abort(); clearTimeout(initial); clearInterval(interval); };
+  }, [selectedId, requestDetails]);
 
-  try {
+  function selectMatch(match: Match) {
+    if (match.id === selectedId) return;
+    detailsGeneration.current.version++;
+    setStatsCachedAt(null);
     setFixtureStats([]);
     setFixtureEvents([]);
-
-    const res = await fetch(`/api/fixture?id=${currentId}&t=${Date.now()}`, {
-      cache: "no-store",
-    });
-
-    const data = await res.json();
-
-    setFixtureStats(data.statistics ?? []);
-    setFixtureEvents(data.events ?? []);
-  } catch (error) {
-    console.error("Error refrescando partido manualmente:", error);
+    setSelected(match);
+    localStorage.setItem(SELECTED_MATCH_STORAGE_KEY, String(match.id));
   }
-}
-
-
-
-
-
-
-
-
-  useEffect(() => {
-    if (!selected) return;
-
-    const selectedId = selected.id;
-
-    async function loadFixtureDetails() {
-      try {
-        const res = await fetch(`/api/fixture?id=${selectedId}`, {
-          cache: "no-store",
-        });
-
-        const data = await res.json();
-
-        setFixtureStats(data.statistics ?? []);
-        setFixtureEvents(data.events ?? []);
-      } catch (error) {
-        console.error("Error cargando estadísticas/eventos:", error);
-      }
-    }
-
-    loadFixtureDetails();
-    const interval = setInterval(loadFixtureDetails, 300000);
-    return () => clearInterval(interval);
-  }, [selected?.id]);
 
   const groupedMatches = useMemo(() => {
     const groups: Record<string, Match[]> = {};
@@ -231,7 +223,7 @@ async function handleManualRefresh() {
     });
 
     Object.keys(groups).forEach((key) => {
-      groups[key].sort((a, b) => b.minuteNumber - a.minuteNumber);
+      groups[key].sort((a, b) => (b.minuteNumber ?? -1) - (a.minuteNumber ?? -1));
     });
 
     return groups;
@@ -258,8 +250,8 @@ async function handleManualRefresh() {
           </p>
 
           <p className="text-white/50 mt-3 leading-relaxed">
-            Sistema conectado correctamente. Cuando empiece un partido en directo,
-            aparecerán aquí las predicciones, eventos, momentum, alertas IA e Irvin Score.
+            Cuando haya una captura válida de un partido en directo,
+            aparecerán aquí sus datos y los análisis que puedan evaluarse.
           </p>
         </div>
       </main>
@@ -270,8 +262,8 @@ async function handleManualRefresh() {
   const awayShots = getStat(fixtureStats, selected.away, "Total Shots");
   const homeShotsOn = getStat(fixtureStats, selected.home, "Shots on Goal");
   const awayShotsOn = getStat(fixtureStats, selected.away, "Shots on Goal");
-  const homePossession = getStat(fixtureStats, selected.home, "Ball Possession") || "50%";
-  const awayPossession = getStat(fixtureStats, selected.away, "Ball Possession") || "50%";
+  const homePossession = getStat(fixtureStats, selected.home, "Ball Possession");
+  const awayPossession = getStat(fixtureStats, selected.away, "Ball Possession");
   const homeXg = getStat(fixtureStats, selected.home, "expected_goals");
   const awayXg = getStat(fixtureStats, selected.away, "expected_goals");
   const homeCorners = getStat(fixtureStats, selected.home, "Corner Kicks");
@@ -281,7 +273,10 @@ async function handleManualRefresh() {
   const prediction = calculateLivePoisson({
     homeScore: selected.homeScore,
     awayScore: selected.awayScore,
-    minuteText: getLiveMinute(selected, tick),
+    minuteText: selected.minuteNumber === null ? "" : String(selected.minuteNumber),
+    status: selected.half, homeXg, awayXg, stale: liveStale,
+    fixtureAgeSeconds: tick > 0 && typeof liveCachedAt === "number" ? (tick-liveCachedAt)/1000 : null,
+    statisticsAgeSeconds: tick > 0 && typeof statsCachedAt === "number" ? (tick-statsCachedAt)/1000 : null,
     homeShots,
     awayShots,
     homeShotsOn,
@@ -290,59 +285,15 @@ async function handleManualRefresh() {
     awayPossession,
   });
 
-  const homeMomentum =
-    toNumber(homeShots) * 1.2 +
-    toNumber(homeShotsOn) * 2.5 +
-    toNumber(homePossession) * 0.25 +
-    selected.homeScore * 8;
-
-  const awayMomentum =
-    toNumber(awayShots) * 1.2 +
-    toNumber(awayShotsOn) * 2.5 +
-    toNumber(awayPossession) * 0.25 +
-    selected.awayScore * 8;
-
-  const momentumTotal = Math.max(1, homeMomentum + awayMomentum);
-  const homeMomentumPercent = Math.round((homeMomentum / momentumTotal) * 100);
-  const awayMomentumPercent = 100 - homeMomentumPercent;
-
-  const momentumText =
-    homeMomentumPercent > awayMomentumPercent + 10
-      ? `${selected.home} domina`
-      : awayMomentumPercent > homeMomentumPercent + 10
-      ? `${selected.away} domina`
-      : "Partido equilibrado";
-
-  const actionText =
-    prediction.irvinScore >= 85
-      ? "ENTRAR"
-      : prediction.irvinScore >= 65
-      ? "OBSERVAR"
-      : "NO ENTRAR";
-
-  const riskText =
-    prediction.confidence >= 80
-      ? "BAJO"
-      : prediction.confidence >= 60
-      ? "MEDIO"
-      : "ALTO";
-
-  const dataQuality = hasStats ? "ALTA" : fixtureEvents.length > 0 ? "MEDIA" : "BÁSICA";
-
-  const aiSummary = hasStats
-    ? "Modo completo: decisión basada en marcador, minuto, eventos y estadísticas avanzadas."
-    : "Modo Live Básico: esta liga no entrega estadísticas avanzadas. La decisión se basa en marcador, minuto, eventos y modelo Poisson.";
+  const actionText = "SIN RECOMENDACIÓN VALIDADA";
+  const riskText = "NO EVALUABLE";
+  const dataQuality = prediction.dataQuality;
+  const aiSummary = prediction.aiSummary;
 
   return (
     <main className="min-h-[100dvh] bg-[#03070b] text-white px-4 pt-4 pb-24 space-y-4 overflow-y-auto">
-      
-      
-      
-<LiveMobileHeader
-  matchesCount={matches.length}
-  loading={loading}
-  onRefresh={handleManualRefresh}
-/>
+      <LiveMobileHeader matchesCount={matches.length} loading={loading} onRefresh={handleManualRefresh} />
+
 
 
 
@@ -368,10 +319,10 @@ async function handleManualRefresh() {
               EN VIVO
             </div>
             <div className="text-6xl font-black mt-4 tracking-wide">
-              {selected.homeScore} - {selected.awayScore}
+              {liveValue(selected.homeScore)} - {liveValue(selected.awayScore)}
             </div>
             <div className="mt-3 text-green-400 font-black text-2xl">
-              {getLiveMinute(selected, tick)} · {selected.half}
+              {getLiveMinute(selected)} · {selected.half}
             </div>
           </div>
 
@@ -381,25 +332,22 @@ async function handleManualRefresh() {
           </div>
         </div>
 
-        <div
+        {prediction.homeWin !== null ? <div
           className="mt-5 h-7 rounded-xl overflow-hidden grid text-[11px] font-black text-center"
           style={{
-            gridTemplateColumns: `${Math.max(prediction.homeWin, 1)}fr ${Math.max(
-              prediction.draw,
-              1
-            )}fr ${Math.max(prediction.awayWin, 1)}fr`,
+            gridTemplateColumns: `${(prediction.homeWin ?? 0)}fr ${(prediction.draw ?? 0)}fr ${(prediction.awayWin ?? 0)}fr`,
           }}
         >
           <div className="bg-green-500 text-black flex items-center justify-center">
-            {prediction.homeWin}%
+            {liveValue(prediction.homeWin, "%")}
           </div>
           <div className="bg-slate-500 flex items-center justify-center">
-            {prediction.draw}%
+            {liveValue(prediction.draw, "%")}
           </div>
           <div className="bg-blue-600 flex items-center justify-center">
-            {prediction.awayWin}%
+            {liveValue(prediction.awayWin, "%")}
           </div>
-        </div>
+        </div> : <p>Resultado no evaluable</p>}
       </section>
 
 
@@ -412,14 +360,7 @@ async function handleManualRefresh() {
   selectedId={selected.id}
   tick={tick}
   getLiveMinute={getLiveMinute}
-  onSelect={(m) => {
-    setSelected(m);
-
-    localStorage.setItem(
-      SELECTED_MATCH_STORAGE_KEY,
-      String(m.id)
-    );
-  }}
+  onSelect={selectMatch}
 />
 
 
@@ -432,26 +373,26 @@ async function handleManualRefresh() {
 
 
       <section className="grid grid-cols-3 gap-2">
-        <Box title="1" value={`${prediction.homeWin}%`} />
-        <Box title="X" value={`${prediction.draw}%`} />
-        <Box title="2" value={`${prediction.awayWin}%`} />
+        <Box title="1" value={`${liveValue(prediction.homeWin, "%")}`} />
+        <Box title="X" value={`${liveValue(prediction.draw, "%")}`} />
+        <Box title="2" value={`${liveValue(prediction.awayWin, "%")}`} />
       </section>
 
       <section className="grid grid-cols-3 gap-2">
-        <Box title="+1.5" value={`${prediction.over15}%`} />
-        <Box title="+2.5" value={`${prediction.over25}%`} />
-        <Box title="+3.5" value={`${prediction.over35}%`} />
+        <Box title="+1.5" value={`${liveValue(prediction.over15, "%")}`} />
+        <Box title="+2.5" value={`${liveValue(prediction.over25, "%")}`} />
+        <Box title="+3.5" value={`${liveValue(prediction.over35, "%")}`} />
       </section>
 
       <section className="grid grid-cols-2 gap-2">
-        <Box title="BTTS Sí" value={`${(prediction as any).bttsYes ?? (prediction as any).btts ?? 0}%`} />
-        <Box title="BTTS No" value={`${(prediction as any).bttsNo ?? 100 - ((prediction as any).btts ?? 0)}%`} />
+        <Box title="BTTS Sí" value={liveValue(prediction.bttsYes, "%")} />
+        <Box title="BTTS No" value={liveValue(prediction.bttsNo, "%")} />
       </section>
 
       <section className="grid grid-cols-3 gap-2">
-        <Box title="Gol Local" value={`${prediction.nextGoalHome}%`} />
-        <Box title="Sin Gol" value={`${prediction.nextGoalDraw}%`} />
-        <Box title="Gol Visitante" value={`${prediction.nextGoalAway}%`} />
+        <Box title="Gol Local" value={`${liveValue(prediction.nextGoalHome, "%")}`} />
+        <Box title="Sin Gol" value={`${liveValue(prediction.nextGoalDraw, "%")}`} />
+        <Box title="Gol Visitante" value={`${liveValue(prediction.nextGoalAway, "%")}`} />
       </section>
 
       <section className="rounded-3xl bg-[#07111c] border border-white/10 p-5 shadow-2xl">
@@ -466,8 +407,8 @@ async function handleManualRefresh() {
         <div className="grid grid-cols-2 gap-3 mt-6">
           <Box title="Acción" value={actionText} />
           <Box title="Riesgo" value={riskText} />
-          <Box title="Confianza" value={`${prediction.confidence}%`} />
-          <Box title="Score" value={`${prediction.irvinScore}/100`} />
+          <Box title="Confianza" value={"No evaluable"} />
+          <Box title="Score" value={"No evaluable"} />
         </div>
 
         <div className="mt-5">
@@ -491,6 +432,8 @@ async function handleManualRefresh() {
 
           <div className="mt-4 rounded-2xl bg-green-500/10 border border-green-500/30 p-4 text-sm text-white/70 leading-relaxed">
             <span className="font-black text-white">Resumen:</span> {aiSummary}
+            <p>Datos y xG del proveedor; probabilidades propias exploratorias a 90 minutos, sin añadido.</p>
+            {prediction.issues.map(issue => <p key={issue}>{issue}</p>)}
           </div>
         </div>
       </section>
@@ -502,9 +445,9 @@ async function handleManualRefresh() {
           <div className="text-white/40 text-center mt-3">Sin eventos disponibles</div>
         ) : (
           <div className="mt-4 space-y-2">
-            {fixtureEvents.slice(-5).reverse().map((e: any, i: number) => (
+            {fixtureEvents.slice(-5).reverse().map((e: FixtureEvent, i: number) => (
               <div key={i} className="bg-white/5 rounded-xl px-4 py-3 text-sm font-bold flex justify-between gap-2">
-                <span>{e.time?.elapsed}' {eventIcon(e.type)} {e.type}</span>
+                <span>{e.time?.elapsed}&apos; {eventIcon(e.type)} {e.type}</span>
                 <span className="text-green-300 truncate">{e.player?.name ?? e.team?.name}</span>
               </div>
             ))}
@@ -512,16 +455,8 @@ async function handleManualRefresh() {
         )}
       </section>
 
-      <section className="rounded-3xl bg-[#07111c] border border-white/10 p-5 shadow-2xl">
-        <div className="text-white/50 font-black text-center text-lg">MOMENTUM IA</div>
-        <div className="mt-4 text-center text-green-400 font-black text-2xl">
-          {momentumText}
-        </div>
-
-        <div className="mt-5 space-y-4">
-          <MomentumRow team={selected.home} value={homeMomentumPercent} color="bg-green-400" />
-          <MomentumRow team={selected.away} value={awayMomentumPercent} color="bg-blue-500" />
-        </div>
+      <section className="rounded-3xl bg-[#07111c] p-5">
+        Momentum, confianza, riesgo y valor: no evaluables sin validación histórica.
       </section>
 
       <section className="rounded-3xl bg-[#07111c] border border-white/10 p-5 shadow-2xl">
@@ -529,15 +464,15 @@ async function handleManualRefresh() {
 
         {!hasStats ? (
           <div className="text-white/40 text-center mt-3">
-            Modo Live Básico: marcador + eventos + modelo Poisson
+            Estadísticas del proveedor no disponibles. Confianza no evaluable.
           </div>
         ) : (
           <div className="mt-4 space-y-2">
-            <StatRow label="xG" home={homeXg} away={awayXg} />
-            <StatRow label="Tiros" home={homeShots} away={awayShots} />
-            <StatRow label="A puerta" home={homeShotsOn} away={awayShotsOn} />
-            <StatRow label="Corners" home={homeCorners} away={awayCorners} />
-            <StatRow label="Posesión" home={homePossession} away={awayPossession} />
+            <StatRow label="xG" home={liveValue(homeXg)} away={liveValue(awayXg)} />
+            <StatRow label="Tiros" home={liveValue(homeShots)} away={liveValue(awayShots)} />
+            <StatRow label="A puerta" home={liveValue(homeShotsOn)} away={liveValue(awayShotsOn)} />
+            <StatRow label="Corners" home={liveValue(homeCorners)} away={liveValue(awayCorners)} />
+            <StatRow label="Posesión" home={liveValue(homePossession, "%")} away={liveValue(awayPossession, "%")} />
           </div>
         )}
       </section>
@@ -569,10 +504,8 @@ async function handleManualRefresh() {
                   {games.map((m) => (
                     <button
                       key={m.id}
-                      onClick={() => {
-  setSelected(m);
-  localStorage.setItem(SELECTED_MATCH_STORAGE_KEY, String(m.id));
-}}
+                      onClick={() => selectMatch(m)}
+                      data-live-fixture-id={m.id}
                       className={`w-full rounded-xl p-3 grid grid-cols-[52px_1fr_64px] items-center gap-2 ${
                         selected.id === m.id
                           ? "bg-green-500/15 border border-green-400/40"
@@ -581,7 +514,7 @@ async function handleManualRefresh() {
                     >
                       <div className="text-left">
                         <div className="text-green-400 font-black text-xl">
-                          {getLiveMinute(m, tick)}
+                          {getLiveMinute(m)}
                         </div>
                         <div className="text-[10px] text-white/40">{m.half}</div>
                       </div>
@@ -593,7 +526,7 @@ async function handleManualRefresh() {
                       </div>
 
                       <div className="text-right font-black text-xl">
-                        {m.homeScore}-{m.awayScore}
+                        {liveValue(m.homeScore)}-{liveValue(m.awayScore)}
                       </div>
                     </button>
                   ))}
@@ -616,37 +549,12 @@ function Box({ title, value }: { title: string; value: string }) {
   );
 }
 
-function StatRow({ label, home, away }: { label: string; home: any; away: any }) {
+function StatRow({ label, home, away }: { label: string; home: string; away: string }) {
   return (
     <div className="grid grid-cols-[70px_1fr_70px] items-center bg-white/5 rounded-xl px-4 py-3 text-sm">
       <div className="font-black">{home}</div>
       <div className="text-center text-white/50 font-bold">{label}</div>
       <div className="font-black text-right">{away}</div>
-    </div>
-  );
-}
-
-function MomentumRow({
-  team,
-  value,
-  color,
-}: {
-  team: string;
-  value: number;
-  color: string;
-}) {
-  return (
-    <div>
-      <div className="flex justify-between text-sm text-white/60 mb-2">
-        <span className="truncate">{team}</span>
-        <span>{value}%</span>
-      </div>
-      <div className="h-4 bg-white/10 rounded-full overflow-hidden">
-        <div
-          className={`h-full ${color} transition-all duration-700`}
-          style={{ width: `${value}%` }}
-        />
-      </div>
     </div>
   );
 }
