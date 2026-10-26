@@ -1,5 +1,6 @@
 "use client";
 
+import styles from "./LiveTvDashboard.module.css";
 import React, { useEffect, useState } from "react";
 import { calculateLivePoisson } from "@/lib/livePoisson";
 import { readLiveStat as getStat, liveValue, type FixtureStatistics } from "@/lib/liveData";
@@ -201,14 +202,9 @@ export default function LiveTvDashboard() {
 
   if (!selectedMatch) {
     return (
-      <main className="min-h-[100dvh] bg-[#03070b] text-white flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-5xl font-black text-green-400">IRVIN ANALYTICS</div>
-          <div className="mt-4 text-white/50">
-            {loading ? "Cargando partidos..." : liveError ?? "No hay partidos en vivo"}
-          </div>
-        </div>
-      </main>
+      <main className={styles.page}><div className={styles.emptyState}>
+        <h1>IRVIN ANALYTICS</h1><p>{loading ? "Cargando partidos..." : liveError ?? "No hay partidos en vivo"}</p>
+      </div></main>
     );
   }
 
@@ -237,383 +233,145 @@ export default function LiveTvDashboard() {
     awayPossession,
   });
 
-  const bttsYes = prediction.bttsYes;
-  const bttsNo = prediction.bttsNo;
-  const actionText = "SIN RECOMENDACIÓN VALIDADA";
-  const riskText = "NO EVALUABLE";
   const dataQuality = prediction.dataQuality ?? "insuficiente";
+  const settled = prediction.settled ?? [];
 
   return (
-    <main className="min-h-[100dvh] xl:h-[100dvh] bg-[#03070b] text-white xl:overflow-hidden p-3">
-      <div className="h-full grid xl:grid-rows-[auto_minmax(0,1fr)_auto] gap-3">
-        <header className="rounded-2xl bg-[#07111c] border border-white/10 px-5 py-3 grid gap-3 lg:grid-cols-[300px_1fr_260px] items-center shadow-[0_0_30px_rgba(0,255,120,.08)]">
-          <div className="flex items-center gap-5">
-            <div>
-             <div className="text-3xl font-black tracking-[0.28em]">IRVIN</div>
-              <div className="text-green-400 text-xs font-black tracking-[0.55em]">
-                ANALYTICS
-              </div>
-            </div>
-
-            <div>
-              <div className="text-2xl font-black tracking-tight">IRVIN ANALYTICS</div>
-<div className="text-xl font-black text-white/70">PRO TERMINAL</div>
-            </div>
-          </div>
-
-          <div className="flex items-center justify-center gap-8">
-            <Badge value="● EN VIVO" />
-            <Badge value={`DATOS: ${dataQuality.toUpperCase()}`} yellow={dataQuality !== "avanzada"} />
-            <div className="text-center">
-              <div className="text-5xl font-black text-green-400">{matches.length}</div>
-              <div className="text-sm font-black text-white/70">PARTIDOS EN VIVO</div>
-            </div>
-          </div>
-
-          <div className="text-right">
-            <div className="text-4xl font-black">{lastUpdate}</div>
-            <div className="text-white/50">Caché compartida cada 30 s · proveedor cada 5 min</div>
+    <main className={styles.page}>
+      <div className={styles.shell}>
+        <header className={styles.header}>
+          <div className={styles.brand}><span className={styles.brandMark}>IA</span><div><h1>IRVIN ANALYTICS</h1><p>Live TV · Análisis en directo</p></div></div>
+          <div className={styles.headerMeta}>
+            <span className={styles.liveBadge}>● {matches.length} partidos en vivo</span>
+            <span className={styles.qualityBadge}>Datos: {dataQuality}</span>
+            <span className={styles.timestamp}>Última captura <strong>{lastUpdate}</strong></span>
           </div>
         </header>
 
-        <section className="grid xl:grid-cols-[250px_1fr_310px] gap-3 min-h-0">
-          <aside className="rounded-2xl bg-[#07111c] border border-white/10 p-3 min-h-0 overflow-y-auto">
-            <div className="text-2xl font-black mb-4">PARTIDOS EN VIVO ({matches.length})</div>
-            {liveError && <p role="alert">{liveError} Se conserva la última lista recibida.</p>}
-            {detailsError && <p role="alert">{detailsError}</p>}
-
-            <div className="space-y-3">
-              {matches.map((m) => (
-                <button
-                  key={m.id}
-                  onClick={() => selectMatch(m)}
-                  aria-pressed={selectedMatch.id === m.id}
-                  data-live-fixture-id={m.id}
-                  className={`w-full rounded-xl p-3 text-left border ${
-                    selectedMatch.id === m.id
-                      ? "bg-green-500/15 border-green-400/50"
-                      : "bg-white/5 border-white/5"
-                  }`}
-                >
-                  <div className="flex justify-between">
-                    <div className="text-green-400 font-black text-2xl">
-                      {getLiveMinute(m)}
-                    </div>
-                    <div className="font-black text-xl">
-                      {liveValue(m.homeScore)}-{liveValue(m.awayScore)}
-                    </div>
-                  </div>
-
-                  <div className="mt-2 grid grid-cols-[22px_1fr] gap-2 items-center">
-                    {m.homeFlag ? <img src={m.homeFlag} className="w-5 h-5 object-contain" alt="" /> : <span />}
-                    <div className="font-bold truncate">{m.home}</div>
-                    {m.awayFlag ? <img src={m.awayFlag} className="w-5 h-5 object-contain" alt="" /> : <span />}
-                    <div className="font-bold truncate text-white/60">{m.away}</div>
-                  </div>
-                </button>
-              ))}
+        <div className={styles.layout}>
+          <aside className={styles.matchPanel} aria-label="Selector de partidos">
+            <div className={styles.panelHeading}><h2>Partidos en vivo</h2><span>{matches.length}</span></div>
+            {liveError && <p className={styles.alert} role="alert">{liveError} Se conserva la última lista recibida.</p>}
+            <div className={styles.matchList}>
+              {matches.map(m => <button key={m.id} type="button" onClick={() => selectMatch(m)} aria-pressed={selectedMatch.id === m.id} data-live-fixture-id={m.id}
+                className={`${styles.matchButton} ${selectedMatch.id === m.id ? styles.selectedMatch : ""}`}>
+                <span className={styles.matchMeta}><span>{getLiveMinute(m)}</span><span>{liveValue(m.homeScore)} – {liveValue(m.awayScore)}</span></span>
+                <span className={styles.matchTeam}>{m.homeFlag && <img src={m.homeFlag} alt="" width={20} height={20} />}<span>{m.home}</span></span>
+                <span className={styles.matchTeam}>{m.awayFlag && <img src={m.awayFlag} alt="" width={20} height={20} />}<span>{m.away}</span></span>
+                <span className={styles.matchLeague}>{m.country} · {m.league}</span>
+              </button>)}
             </div>
           </aside>
 
-          <section className="rounded-2xl bg-[#07111c] border border-white/10 p-3 min-h-0 overflow-y-auto">
-            <div className="text-sm text-white/70 mb-2" role="status">
-              Datos del proveedor: marcador, minuto y estadísticas disponibles. xG: estimación del proveedor.
-              <br />Modelo: {prediction.modelStatus ?? "no evaluable"}. Confianza no evaluable.
-              <br />{prediction.aiSummary}
-              <p>Los sucesos cumplidos se muestran según el marcador recibido, sujeto a correcciones.</p>
-              {(prediction.issues ?? []).map((issue) => <p key={issue}>{issue}</p>)}
-            </div>
-            <ScoreBoard
-              match={selectedMatch}
-              minute={getLiveMinute(selectedMatch)}
-              prediction={prediction}
-            />
+          <section className={styles.analysis} aria-label="Análisis del partido seleccionado">
+            <ScoreBoard match={selectedMatch} minute={getLiveMinute(selectedMatch)} prediction={prediction} />
+            {detailsError && <p className={styles.alert} role="alert">{detailsError}</p>}
+            <div className={styles.summaryLine} role="status"><span className={styles.qualityBadge}>Calidad {dataQuality}</span><span>Confianza no evaluable</span></div>
 
-            <div className="grid grid-cols-3 gap-2 mt-3">
-              <MetricCard title="xG DEL PROVEEDOR" value={`${liveValue(homeXg)} - ${liveValue(awayXg)}`} />
-              <MetricCard title="POSESIÓN" value={`${liveValue(homePossession, "%")} / ${liveValue(awayPossession, "%")}`} />
-              <MetricCard title="TIROS TOTALES" value={`${liveValue(homeShots)} - ${liveValue(awayShots)}`} />
+            <div className={styles.metricsGrid}>
+              <MetricCard title="xG del proveedor" value={`${liveValue(homeXg)} - ${liveValue(awayXg)}`} missing={homeXg == null || awayXg == null} note="Estimación del proveedor" />
+              <MetricCard title="Posesión" value={`${liveValue(homePossession, "%")} / ${liveValue(awayPossession, "%")}`} missing={homePossession == null || awayPossession == null} note="Local / Visitante" />
+              <MetricCard title="Tiros totales" value={`${liveValue(homeShots)} - ${liveValue(awayShots)}`} missing={homeShots == null || awayShots == null} note="Local / Visitante" />
             </div>
 
-            <div className="grid grid-cols-3 gap-2 mt-2">
-              <MarketCard title="PRÓXIMO GOL · ESTIMACIÓN">
-                <div className="grid grid-cols-3 text-center items-end">
-                  <div>
-                    <div className="text-green-400 font-black truncate">{selectedMatch.home}</div>
-                    <div className="text-4xl font-black text-green-400">{liveValue(prediction.nextGoalHome, "%")}</div>
-                  </div>
-                  <div>
-                    <div className="text-white/50 font-black">SIN GOL</div>
-                    <div className="text-4xl font-black">{liveValue(prediction.nextGoalDraw, "%")}</div>
-                  </div>
-                  <div>
-                    <div className="text-blue-400 font-black truncate">{selectedMatch.away}</div>
-                    <div className="text-4xl font-black text-blue-400">{liveValue(prediction.nextGoalAway, "%")}</div>
-                  </div>
-                </div>
+            <h2 className={styles.sectionHeading}>Probabilidades del partido</h2>
+            <p className={styles.sectionNote}>Las estimaciones no están calibradas. «Observado» indica un resultado conocido según el marcador recibido.</p>
+            <div className={styles.marketsGrid}>
+              <MarketCard title="Resultado · 1X2">
+                <Probability label={selectedMatch.home} value={prediction.homeWin} observed={settled.includes("result")} />
+                <Probability label="Empate" value={prediction.draw} observed={settled.includes("result")} />
+                <Probability label={selectedMatch.away} value={prediction.awayWin} observed={settled.includes("result")} />
               </MarketCard>
-
-              <MarketCard title="GOLES · ESTIMACIÓN / SUCESO CUMPLIDO">
-                <div className="grid grid-cols-3 text-center">
-                  <BigPercent label="+1.5" value={prediction.over15} />
-                  <BigPercent label="+2.5" value={prediction.over25} />
-                  <BigPercent label="+3.5" value={prediction.over35} />
-                </div>
+              <MarketCard title="Próximo gol · hasta el minuto 90">
+                <Probability label={selectedMatch.home} value={prediction.nextGoalHome} observed={settled.includes("nextGoal")} />
+                <Probability label="Sin gol" value={prediction.nextGoalDraw} observed={settled.includes("nextGoal")} />
+                <Probability label={selectedMatch.away} value={prediction.nextGoalAway} observed={settled.includes("nextGoal")} />
               </MarketCard>
-
-              <MarketCard title="1ª MITAD">
-                <div className="grid grid-cols-3 text-center">
-                  <BigPercent label={selectedMatch.home} value={prediction.firstHalfHomeWin} />
-                  <BigPercent label="EMPATE" value={prediction.firstHalfDraw} />
-                  <BigPercent label={selectedMatch.away} value={prediction.firstHalfAwayWin} />
-                </div>
+              <MarketCard title="Total de goles">
+                <Probability label="Más de 1.5" value={prediction.over15} observed={settled.includes("over15")} />
+                <Probability label="Más de 2.5" value={prediction.over25} observed={settled.includes("over25")} />
+                <Probability label="Más de 3.5" value={prediction.over35} observed={settled.includes("over35")} />
+              </MarketCard>
+              <MarketCard title="Ambos equipos anotan · BTTS">
+                <Probability label="Sí" value={prediction.bttsYes} observed={settled.includes("btts")} />
+                <Probability label="No" value={prediction.bttsNo} observed={settled.includes("btts")} />
+              </MarketCard>
+              <MarketCard title="Resultado de la primera mitad">
+                <Probability label={selectedMatch.home} value={prediction.firstHalfHomeWin} observed={settled.includes("firstHalf")} />
+                <Probability label="Empate" value={prediction.firstHalfDraw} observed={settled.includes("firstHalf")} />
+                <Probability label={selectedMatch.away} value={prediction.firstHalfAwayWin} observed={settled.includes("firstHalf")} />
               </MarketCard>
             </div>
 
-            <div className="grid grid-cols-3 gap-2 mt-2">
-              <MarketCard title="AMBOS ANOTAN (BTTS)">
-                <div className="grid grid-cols-2 text-center">
-                  <BigPercent label="SÍ" value={bttsYes} green />
-                  <BigPercent label="NO" value={bttsNo} red />
-                </div>
-              </MarketCard>
-
-              <MarketCard title="ALCANCE DEL MODELO">
-                <div className="text-center text-white/50">
-                  Estimaciones exploratorias; sin calibración histórica. No se evalúa momentum.
-                </div>
-              </MarketCard>
-
-              <MarketCard title="CALIDAD DE DATOS">
-                <div className="text-center">
-                  <div className="text-4xl font-black text-green-400">
-                    {dataQuality.toUpperCase()}
-                  </div>
-                  <div className="text-white/40 mt-2">
-                    Cobertura de datos; no equivale a fiabilidad predictiva
-                  </div>
-                </div>
-              </MarketCard>
-            </div>
+            <details className={styles.methodology}>
+              <summary>Cómo interpretar el análisis</summary>
+              <div className={styles.methodologyBody}>
+                <p>Datos del proveedor: marcador, minuto y estadísticas disponibles. Los xG son estimaciones del proveedor.</p>
+                <p>Modelo: {prediction.modelStatus ?? "no evaluable"}. {prediction.aiSummary}</p>
+                <p>Los sucesos cumplidos se muestran según el marcador recibido, sujeto a correcciones. Calidad de datos no equivale a confianza predictiva.</p>
+                {(prediction.issues ?? []).length > 0 && <ul>{prediction.issues.map(issue => <li key={issue}>{issue}</li>)}</ul>}
+              {(prediction.aiDecisions ?? []).length > 0 && <ul className={styles.decisions}>{prediction.aiDecisions.slice(0,5).map((item,index) => <li key={index}>{item}</li>)}</ul>}
+                <p>Estimaciones a 90 minutos, sin añadido ni prórroga. La lista lee la caché compartida cada 30 segundos; el proveedor se actualiza como máximo cada cinco minutos.</p>
+              </div>
+            </details>
           </section>
 
-          <aside className="grid grid-rows-[90px_1fr] gap-3 min-h-0">
-            <div className="rounded-2xl bg-[#07111c] border border-white/10 p-5">
-              <div className="text-2xl font-black">EVENTOS EN VIVO</div>
-              <div className="text-white/50 mt-3">
-                {fixtureEvents.length === 0 ? "Sin eventos disponibles todavía." : `${fixtureEvents.length} eventos detectados`}
+          <aside className={styles.insights} aria-label="Estado del análisis y eventos">
+            <section className={styles.panel} data-ui-card>
+              <h2 className={styles.sectionHeading}>Lectura del análisis</h2>
+              <div className={styles.recommendation} data-ui-card><span className={styles.eyebrow}>Recomendación</span><p>{prediction.recommendation ?? "Sin recomendación validada"}</p></div>
+              <div className={styles.decisionsGrid}>
+                <DecisionBox title="Confianza" value="No evaluable" />
+                <DecisionBox title="Riesgo" value="No evaluable" />
+                <DecisionBox title="Irvin Score" value="No evaluable" />
+                <DecisionBox title="Estado" value={prediction.modelStatus ?? "No evaluable"} />
               </div>
-            </div>
-
-            <div className="rounded-2xl bg-[#07111c] border border-white/10 p-5 min-h-0 overflow-y-auto">
-              <div className="text-2xl font-black mb-4">IRVIN AI DECISIONES</div>
-
-              <div className="rounded-2xl bg-green-500/15 border border-green-500/30 p-4">
-                <div className="text-white/50 font-black text-sm">RECOMENDACIÓN PRINCIPAL</div>
-                <div className="text-4xl font-black text-green-400 mt-2">
-                  {prediction.recommendation}
-                </div>
-                <div className="text-white/60 mt-3">
-                  No es garantía de acierto. Úsalo como lectura estadística, no como apuesta segura.
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3 mt-4">
-                <DecisionBox title="ACCIÓN" value={actionText} />
-                <DecisionBox title="RIESGO" value={riskText} />
-                <DecisionBox title="CONFIANZA" value="NO EVALUABLE" />
-                <DecisionBox title="IRVIN SCORE" value="NO EVALUABLE" />
-              </div>
-
-              <div className="mt-4 text-white/50 font-black text-sm">LECTURA DE LA IA</div>
-              <div className="mt-2 space-y-2">
-                {(prediction.aiDecisions ?? []).slice(0, 5).map((item: string, i: number) => (
-                  <div key={i} className="rounded-xl bg-white/5 border border-white/10 px-3 py-2 text-sm">
-                    {item}
-                  </div>
-                ))}
-              </div>
-
-              <div className="mt-4 space-y-2">
-                {fixtureEvents.slice(-5).reverse().map((e: FixtureEvent, i: number) => (
-                  <div key={i} className="rounded-xl bg-white/5 border border-white/10 p-3 text-sm flex justify-between gap-2">
-                    <span>{e.time?.elapsed}&apos; {eventIcon(e.type)} {e.type}</span>
-                    <span className="text-green-300 truncate">{e.player?.name ?? e.team?.name}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
+            </section>
+            <section className={styles.panel} data-ui-card>
+              <div className={styles.panelHeading}><h2>Eventos</h2><span>{fixtureEvents.length}</span></div>
+              {fixtureEvents.length === 0 ? <p className={styles.emptyNote}>Sin eventos disponibles todavía.</p> :
+                <ol className={styles.events}>{fixtureEvents.slice(-5).reverse().map((event,index) => <li key={index}>
+                  <span className={styles.eventMinute}>{event.time?.elapsed}&apos; {eventIcon(event.type)}</span>
+                  <div><strong>{event.type}</strong><p>{event.player?.name ?? event.team?.name}</p></div>
+                </li>)}</ol>}
+            </section>
           </aside>
-        </section>
-
-        <footer className="rounded-xl bg-[#07111c] border border-white/10 grid gap-2 lg:grid-cols-[1fr_1fr_1fr_180px] text-sm font-black overflow-hidden">
-          <div className="px-4 flex items-center text-yellow-300">
-            🔔 ALERTAS&nbsp;
-            <span className="text-white">
-              ID: {selectedMatch.id} | STATS: {fixtureStats.length} | EVENTS: {fixtureEvents.length}
-            </span>
-          </div>
-          <div className="px-4 flex items-center border-l border-white/10">
-            🔥 IA: {prediction.recommendation} · {actionText} · Confianza no evaluable
-          </div>
-          <div className="px-4 flex items-center border-l border-white/10">
-            📊 Datos: {dataQuality}
-          </div>
-          <div className="px-4 flex items-center justify-center border-l border-white/10 text-green-400">
-            LISTA CADA 30 S
-          </div>
-        </footer>
+        </div>
+        <footer className={styles.footer}><span>IRVIN ANALYTICS · Live TV</span><span>Partido {selectedMatch.id} · {fixtureStats.length} equipos con estadísticas · {fixtureEvents.length} eventos</span></footer>
       </div>
     </main>
   );
 }
 
-function Badge({ value, yellow }: { value: string; yellow?: boolean }) {
-  return (
-    <div className={`rounded-full px-8 py-3 font-black border ${
-      yellow
-        ? "bg-yellow-400/10 border-yellow-400/20 text-yellow-300"
-        : "bg-green-500/15 border-green-500/30 text-green-400"
-    }`}>
-      {value}
+function ScoreBoard({match, minute, prediction}: {match: Match; minute: string; prediction: Prediction}) {
+  return <section className={styles.scoreboard} aria-label="Marcador" data-ui-card>
+    <p className={styles.league}>{match.country} · {match.league}</p>
+    <div className={styles.scoreGrid}>
+      <TeamBlock name={match.home} logo={match.homeFlag} side="Local" />
+      <div className={styles.scoreCenter}><span className={styles.liveBadge}>En vivo</span><div className={styles.score}>{liveValue(match.homeScore)}<span>–</span>{liveValue(match.awayScore)}</div><p>{minute} · {match.half}</p></div>
+      <TeamBlock name={match.away} logo={match.awayFlag} side="Visitante" />
     </div>
-  );
+    {prediction.homeWin == null && <p className={styles.emptyNote}>Resultado: no evaluable</p>}
+  </section>;
 }
-
-function ScoreBoard({
-  match,
-  minute,
-  prediction,
-}: {
-  match: Match;
-  minute: string;
-  prediction: Prediction;
-}) {
-  return (
-    <div className="rounded-2xl bg-[#07111c] border border-white/10 p-4">
-      <div className="text-center text-white/40 font-black text-sm">
-        {match.league}
-      </div>
-
-      <div className="grid grid-cols-[1fr_240px_1fr] items-center mt-2">
-        <TeamBlock side="LOCAL" logo={match.homeFlag} name={match.home} align="left" />
-
-        <div className="text-center">
-          <div className="text-green-400 text-xs font-black">EN VIVO</div>
-          <div className="text-6xl font-black mt-1">
-            {liveValue(match.homeScore)} - {liveValue(match.awayScore)}
-          </div>
-          <div className="text-white/50 mt-1">{minute} · {match.half}</div>
-        </div>
-
-        <TeamBlock side="VISITANTE" logo={match.awayFlag} name={match.away} align="right" />
-      </div>
-
-      {prediction.homeWin !== null && prediction.homeWin !== undefined ? <div
-        className="mt-4 h-6 rounded-lg overflow-hidden grid text-xs font-black text-center"
-        style={{
-          gridTemplateColumns: `${(prediction.homeWin ?? 0)}fr ${(prediction.draw ?? 0)}fr ${(prediction.awayWin ?? 0)}fr`,
-        }}
-      >
-        <div className="bg-green-500 text-black flex items-center justify-center">{liveValue(prediction.homeWin, "%")}</div>
-        <div className="bg-slate-500 flex items-center justify-center">{liveValue(prediction.draw, "%")}</div>
-        <div className="bg-blue-600 flex items-center justify-center">{liveValue(prediction.awayWin, "%")}</div>
-      </div> : <p className="text-center mt-4">Resultado: no evaluable</p>}
-    </div>
-  );
+function TeamBlock({name, logo, side}: {name: string; logo: string; side: string}) {
+  return <div className={styles.teamBlock}>{logo && <img src={logo} alt="" width={44} height={44} />}<span className={styles.eyebrow}>{side}</span><strong>{name}</strong></div>;
 }
-
-function TeamBlock({
-  side,
-  logo,
-  name,
-  align,
-}: {
-  side: string;
-  logo: string;
-  name: string;
-  align: "left" | "right";
-}) {
-  return (
-    <div className={align === "right" ? "text-right" : "text-left"}>
-      <div className={`flex items-center gap-4 ${align === "right" ? "justify-end" : ""}`}>
-        {align === "left" && logo && <img src={logo} alt={name} className="w-10 h-10 object-contain" />}
-        <div>
-          <div className="text-white/40 text-xs font-black">{side}</div>
-          <div className="text-2xl font-black truncate max-w-[300px]">{name}</div>
-        </div>
-        {align === "right" && logo && <img src={logo} alt={name} className="w-10 h-10 object-contain" />}
-      </div>
-    </div>
-  );
+function MetricCard({title,value,missing,note}: {title: string; value: string; missing: boolean; note: string}) {
+  return <section className={styles.metric} data-ui-card><h3>{title}</h3><p className={missing ? styles.missingMetric : styles.metricValue}>{value}</p><span className={styles.emptyNote}>{note}</span></section>;
 }
-
-function MetricCard({ title, value }: { title: string; value: React.ReactNode }) {
-  return (
-    <div className="h-36 rounded-xl bg-[#030b12] border border-white/10 p-4 flex flex-col items-center justify-center">
-      <div className="text-white/40 text-sm font-black mb-4">{title}</div>
-      <div className="text-4xl font-black">{value}</div>
-    </div>
-  );
+function MarketCard({title,children}: {title: string; children: React.ReactNode}) {
+  return <section className={styles.market} data-ui-card><h3>{title}</h3><div className={styles.probabilityGrid}>{children}</div></section>;
 }
-
-function MarketCard({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="h-40 rounded-xl bg-[#030b12] border border-white/10 p-4 flex flex-col justify-center">
-      <div className="text-white/40 text-sm font-black text-center mb-4">{title}</div>
-      {children}
-    </div>
-  );
+function Probability({label,value,observed}: {label: string; value: number | null | undefined; observed: boolean}) {
+  const available = typeof value === "number" && Number.isFinite(value);
+  const mode = !available ? "missing" : observed ? "observed" : "estimated";
+  return <div className={styles.probability} data-probability={mode}>
+    <span className={styles.probabilityLabel}>{label}</span>
+    <strong className={available ? styles.probabilityValue : styles.missingValue}>{available ? liveValue(value,"%") : "No evaluable"}</strong>
+    <span className={`${styles.probabilityKind} ${observed && available ? styles.observedKind : ""}`}>{!available ? "Sin datos" : observed ? "Observado" : "Estimación"}</span>
+  </div>;
 }
-
-function BigPercent({
-  label,
-  value,
-  green,
-  red,
-}: {
-  label: string;
-  value: number | null;
-  green?: boolean;
-  red?: boolean;
-}) {
-  return (
-    <div>
-      <div className="text-white/50 text-sm font-black truncate">{label}</div>
-      <div className={`text-4xl font-black ${green ? "text-green-400" : red ? "text-red-400" : ""}`}>
-        {liveValue(value, "%")}
-      </div>
-    </div>
-  );
-}
-
-function DecisionBox({
-  title,
-  value,
-  green,
-  red,
-  blue,
-}: {
-  title: string;
-  value: string;
-  green?: boolean;
-  red?: boolean;
-  blue?: boolean;
-}) {
-  return (
-    <div className="rounded-xl bg-white/5 border border-white/10 p-4 text-center">
-      <div className="text-white/40 text-xs font-black">{title}</div>
-      <div className={`text-2xl font-black mt-2 ${
-        green ? "text-green-400" : red ? "text-red-400" : blue ? "text-blue-400" : "text-yellow-300"
-      }`}>
-        {value}
-      </div>
-    </div>
-  );
+function DecisionBox({title,value}: {title: string; value: string}) {
+  return <div className={styles.decision} data-ui-card><h3>{title}</h3><p>{value}</p></div>;
 }

@@ -15,6 +15,7 @@ function load(file, imports, globals = {}) {
   }}).outputText;
   vm.runInNewContext(code, { exports, require: name => {
     if (name in imports) return imports[name];
+    if (name.endsWith('.module.css')) return new Proxy({}, {get: (_, key) => key === '__esModule' ? false : String(key)});
     if (name === 'react/jsx-runtime') return require(name);
     throw new Error(`Unexpected import ${name}`);
   }, Date, Response, AbortController, AbortSignal, console, ...globals });
@@ -232,7 +233,7 @@ test('real engine UI distinguishes missing, partial and complete provider data w
       '@/lib/liveData':liveData,'@/lib/livePoisson':engine,
     }).default;
     const html=renderToStaticMarkup(component());
-    assert.ok(html.includes(quality.toUpperCase()));
+    assert.ok(html.includes(quality));
     assert.ok(html.includes('Confianza no evaluable'));
     assert.equal(html.includes('null%'),false); assert.equal(html.includes('undefined%'),false);
     assert.equal(html.includes('33%'),false); assert.equal(html.includes('34%'),false);

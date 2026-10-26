@@ -1,0 +1,88 @@
+.page { min-height: 100dvh; background: #03070b; color: #edf4f8; padding: clamp(12px, 2vw, 28px); font-family: Arial, Helvetica, sans-serif; line-height: 1.5; }
+.page *, .page *::before, .page *::after { box-sizing: border-box; }
+.page h1, .page h2, .page h3, .page p, .page ul, .page ol { margin: 0; }
+.page button { font: inherit; color: inherit; }
+.page img { display: block; object-fit: contain; max-width: 100%; }
+.shell { width: 100%; max-width: 1920px; margin: 0 auto; min-width: 0; }
+.header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 20px; padding: 20px; border: 1px solid #1a2c3c; border-radius: 20px; background: linear-gradient(120deg, #0b1b29, #07111c); margin-bottom: 20px; }
+.brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.brand > div { min-width: 0; }
+.brand h1 { font-size: clamp(1rem, 2vw, 1.4rem); letter-spacing: .12em; overflow-wrap: anywhere; }
+.brand p { font-size: .8rem; color: #96aabe; }
+.brandMark { display: grid; place-items: center; flex: 0 0 42px; height: 42px; border: 1px solid #207052; border-radius: 12px; color: #66e9ae; font-weight: 900; background: #102b25; }
+.headerMeta { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; min-width: 0; }
+.liveBadge, .qualityBadge { display: inline-flex; align-items: center; max-width: 100%; padding: 5px 10px; border-radius: 30px; font-size: .75rem; line-height: 1.5; overflow-wrap: anywhere; }
+.liveBadge { color: #72ecb2; background: #123229; border: 1px solid #20533f; }
+.qualityBadge { color: #cedce8; background: #142332; border: 1px solid #2b3c4d; text-transform: capitalize; }
+.timestamp { font-size: .75rem; color: #96aabe; overflow-wrap: anywhere; }
+.timestamp strong { color: #dce8f1; margin-left: 5px; }
+.layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; align-items: start; }
+.layout > *, .analysis > *, .insights > * { min-width: 0; }
+.matchPanel, .panel, .scoreboard, .market, .metric, .methodology { border: 1px solid #1a2c3c; border-radius: 18px; background: #08121e; }
+.matchPanel, .panel { padding: 16px; }
+.panelHeading { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 14px; }
+.panelHeading h2, .sectionHeading { font-size: 1rem; font-weight: 700; overflow-wrap: anywhere; }
+.panelHeading > span { color: #73eab5; font-size: .8rem; }
+.matchList { display: grid; gap: 8px; max-height: 19rem; overflow-y: auto; scrollbar-gutter: stable; padding-right: 4px; }
+.matchButton { width: 100%; min-width: 0; cursor: pointer; text-align: left; border: 1px solid #203044; border-radius: 12px; background: #0c1927; padding: 12px; }
+.matchButton:hover { border-color: #46705e; background: #102332; }
+.matchButton:focus-visible, .methodology summary:focus-visible { outline: 2px solid #72ecb2; outline-offset: 2px; }
+.selectedMatch { border-color: #4fbc8d; background: #113026; }
+.matchMeta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 12px; font-size: .85rem; font-weight: 700; color: #78eaba; margin-bottom: 8px; overflow-wrap: anywhere; }
+.matchTeam { display: flex; align-items: flex-start; gap: 8px; margin-top: 4px; font-size: .85rem; min-width: 0; }
+.matchTeam img { flex: 0 0 20px; }
+.matchTeam > span { min-width: 0; overflow-wrap: anywhere; }
+.matchLeague { display: block; color: #9aacbe; font-size: .7rem; overflow-wrap: anywhere; margin-top: 8px; }
+.analysis, .insights { display: grid; gap: 16px; }
+.scoreboard { padding: clamp(14px, 2vw, 28px); background: radial-gradient(ellipse at top, #142b3a, #08121e 75%); }
+.league { text-align: center; font-size: .8rem; color: #a6bacb; overflow-wrap: anywhere; }
+.scoreGrid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr); align-items: center; gap: clamp(8px, 2vw, 20px); margin-top: 20px; }
+.teamBlock { min-width: 0; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 7px; }
+.teamBlock strong { font-size: clamp(.8rem, 1.3vw, 1.1rem); overflow-wrap: anywhere; max-width: 100%; }
+.eyebrow { font-size: .7rem; color: #9caec1; letter-spacing: .06em; }
+.scoreCenter { text-align: center; min-width: 0; }
+.scoreCenter > p { color: #a7bbcb; font-size: .8rem; margin-top: 8px; overflow-wrap: anywhere; }
+.score { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px; font-size: clamp(1.4rem, 4vw, 3.2rem); line-height: 1.25; font-weight: 800; margin-top: 10px; overflow-wrap: anywhere; }
+.score span { color: #647b8c; }
+.summaryLine { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; font-size: .8rem; color: #a8bacb; }
+.metricsGrid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+.metric { padding: 16px; min-width: 0; }
+.metric h3, .market h3, .decision h3 { font-size: .8rem; font-weight: 600; color: #b6c7d8; overflow-wrap: anywhere; }
+.metricValue { font-size: clamp(1.1rem, 2vw, 1.6rem); font-weight: 700; margin: 10px 0 6px !important; overflow-wrap: anywhere; }
+.missingMetric { font-size: 1rem; color: #a8b8c8; margin: 10px 0 6px !important; overflow-wrap: anywhere; }
+.sectionNote, .emptyNote { font-size: .8rem; color: #9db0c3; overflow-wrap: anywhere; }
+.scoreboard > .emptyNote { text-align: center; margin-top: 14px; }
+.marketsGrid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+.market { min-width: 0; padding: 16px; }
+.market h3 { margin-bottom: 14px; }
+.probabilityGrid { display: grid; grid-auto-columns: minmax(0, 1fr); grid-auto-flow: column; gap: 10px; align-items: stretch; }
+.probability { min-width: 0; display: flex; flex-direction: column; gap: 9px; padding: 8px 0; overflow-wrap: anywhere; }
+.probabilityLabel { font-size: .75rem; color: #b4c5d6; min-width: 0; }
+.probabilityValue { color: #79e4b1; font-size: clamp(1.15rem, 2vw, 1.8rem); line-height: 1.25; font-variant-numeric: tabular-nums; margin-top: auto; }
+.missingValue { font-size: .95rem; font-weight: 500; color: #9cadbf; line-height: 1.4; margin-top: auto; }
+.probabilityKind { font-size: .65rem; color: #b6c5d6; }
+.observedKind { color: #7eecbd; }
+.methodology { padding: 16px; font-size: .85rem; overflow-wrap: anywhere; }
+.methodology summary { cursor: pointer; color: #d6e6f3; font-weight: 600; }
+.methodologyBody { color: #a8bbcd; display: grid; gap: 12px; margin-top: 16px; }
+.methodologyBody ul { padding-left: 20px; display: grid; gap: 8px; }
+.recommendation { background: #172521; border: 1px solid #2f5043; border-radius: 12px; padding: 14px; margin-top: 16px; min-width: 0; }
+.recommendation p { font-size: clamp(1rem, 1.4vw, 1.2rem); line-height: 1.45; font-weight: 600; color: #bfe2d2; margin-top: 8px; overflow-wrap: anywhere; }
+.decisionsGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
+.decision { min-width: 0; padding: 12px; background: #0d1b29; border: 1px solid #213446; border-radius: 12px; }
+.decision p { font-size: .95rem; line-height: 1.45; color: #dce5ee; margin-top: 7px; overflow-wrap: anywhere; }
+.decisions { list-style: none; padding: 0; margin-top: 16px !important; display: grid; gap: 10px; color: #aebfd0; font-size: .8rem; overflow-wrap: anywhere; }
+.events { list-style: none; padding: 0; display: grid; gap: 12px; }
+.events li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; padding-top: 12px; border-top: 1px solid #203044; font-size: .8rem; overflow-wrap: anywhere; }
+.events strong { font-weight: 600; }
+.events p { color: #a7bbcd; }
+.eventMinute { color: #75dfad; }
+.alert { color: #e9cea0; font-size: .8rem; background: #28251d; border: 1px solid #51472e; border-radius: 12px; padding: 12px; margin-bottom: 12px !important; overflow-wrap: anywhere; }
+.footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 20px; padding: 20px 2px 4px; color: #8fa5b9; font-size: .75rem; overflow-wrap: anywhere; }
+.emptyState { min-height: 70dvh; max-width: 36rem; margin: auto; display: flex; flex-direction: column; justify-content: center; text-align: center; gap: 16px; overflow-wrap: anywhere; }
+.emptyState h1 { font-size: clamp(1.2rem, 5vw, 2rem); color: #78eaba; }
+@media (min-width: 600px) { .metricsGrid { grid-template-columns: repeat(3, minmax(0, 1fr)); } .marketsGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 960px) { .layout { grid-template-columns: 15rem minmax(0, 1fr); } .matchPanel { position: sticky; top: 16px; } .matchList { max-height: calc(100dvh - 15rem); min-height: 12rem; } .insights { grid-column: 2; grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 1440px) { .layout { grid-template-columns: 16rem minmax(0, 1fr) 19rem; } .insights { grid-column: auto; grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 359px) { .probabilityGrid { grid-auto-flow: row; grid-template-columns: minmax(0, 1fr); } .probability { border-top: 1px solid #203044; } .decisionsGrid { grid-template-columns: minmax(0, 1fr); } }
+@media (prefers-reduced-motion: no-preference) { .matchButton { transition: background-color .15s ease, border-color .15s ease; } }
