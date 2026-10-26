@@ -96,6 +96,7 @@ test('fixture and live reject absent sessions before accessing provider',async()
     '@/lib/security':{rateLimit:()=>({ok:true}),getClientIp:()=> 'test'},
     '@/lib/apiFootballFetch':{apiFootballFetch:async()=>{calls++;throw new Error('forbidden')}},
     '@/lib/supabaseAdmin':{supabaseAdmin:{}},
+    '@/lib/liveFixturesCache':{LIVE_POLL_SECONDS:30,readLiveFixtures:async()=>{calls++;throw new Error('forbidden')}},
   };
   for(const route of ['fixture','live']) {
     const api=load(`app/api/${route}/route.ts`,imports);assert.equal((await api.GET(new Request('https://local.test/api/'+route+'?id=1'))).status,401);
@@ -215,6 +216,12 @@ test('statistics, live, fixture and demo recover after UTC reset without cached 
     '@/lib/apiFootballFetch':api,'@/lib/apiFootballQuery':load('lib/apiFootballQuery.ts'),
   };
   const stats=load('app/api/stats/api-football/[...endpoint]/route.ts',imports);
+  imports['@/lib/liveFixturesCache']={LIVE_POLL_SECONDS:30,readLiveFixtures:async()=>{
+    if(cache.has('live-snapshot'))return cache.get('live-snapshot');
+    const response=await api.apiFootballFetch('https://v3.football.api-sports.io/fixtures?live=all');
+    const snapshot={data:await response.json(),updatedAt:Date.now(),stale:false};
+    cache.set('live-snapshot',snapshot);return snapshot;
+  }};
   const live=load('app/api/live/route.ts',imports),fixture=load('app/api/fixture/route.ts',imports),demo=load('app/api/demo-live/route.ts',imports);
   const endpoints=[()=>stats.GET(new Request('https://local.test/api/stats/api-football/fixtures?id=123'),{params:Promise.resolve({endpoint:['fixtures']})}),()=>live.GET(new Request('https://local.test/api/live')),()=>fixture.GET(new Request('https://local.test/api/fixture?id=123')),()=>demo.GET(new Request('https://local.test/api/demo-live'))];
   for(const invoke of endpoints){const response=await invoke();assert.equal(response.status,503);const body=await response.json();assert.equal('response' in body,false);assert.equal('statistics' in body,false);}

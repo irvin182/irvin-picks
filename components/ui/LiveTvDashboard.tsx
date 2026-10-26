@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { calculateLivePoisson } from "@/lib/livePoisson";
 
 type Match = {
@@ -18,7 +18,29 @@ type Match = {
   apiUpdatedAt: number;
 };
 
-function mapApiFixtureToMatch(fx: any): Match {
+type ApiFixture = {
+  fixture: { id: number; status?: { elapsed?: number | null; short?: string } };
+  league?: { name?: string; country?: string };
+  teams?: { home?: { name?: string; logo?: string }; away?: { name?: string; logo?: string } };
+  goals?: { home?: number | null; away?: number | null };
+};
+type FixtureStatistics = {
+  team?: { name?: string };
+  statistics?: { type: string; value: string | number | null }[];
+};
+type FixtureEvent = {
+  type: string;
+  time?: { elapsed?: number };
+  player?: { name?: string };
+  team?: { name?: string };
+};
+type Prediction = ReturnType<typeof calculateLivePoisson> & {
+  btts?: number;
+  firstHalfHome?: number;
+  firstHalfAway?: number;
+};
+
+function mapApiFixtureToMatch(fx: ApiFixture): Match {
   return {
     id: fx.fixture?.id,
     minuteNumber: fx.fixture?.status?.elapsed ?? 0,
@@ -35,20 +57,18 @@ function mapApiFixtureToMatch(fx: any): Match {
   };
 }
 
-function getStat(stats: any[], teamName: string, statName: string) {
+function getStat(stats: FixtureStatistics[], teamName: string, statName: "Total Shots" | "Shots on Goal"): number;
+function getStat(stats: FixtureStatistics[], teamName: string, statName: string): string | number;
+function getStat(stats: FixtureStatistics[], teamName: string, statName: string) {
   const team = stats.find((s) => s.team?.name === teamName);
-  const stat = team?.statistics?.find((x: any) => x.type === statName);
+  const stat = team?.statistics?.find((x) => x.type === statName);
   return stat?.value ?? 0;
-}
-
-function toNumber(value: any) {
-  return Number(String(value).replace("%", "")) || 0;
 }
 
 function getLiveMinute(match: Match, tick: number) {
   if (match.half === "HT") return "HT";
   if (match.half === "FT") return "FT";
-  const secondsPassed = Math.floor((tick - match.apiUpdatedAt) / 1000);
+  const secondsPassed = Math.max(0, Math.floor((tick - match.apiUpdatedAt) / 1000));
   const extraMinutes = Math.floor(secondsPassed / 60);
   return `${Math.min(match.minuteNumber + extraMinutes, 90)}'`;
 }
@@ -63,78 +83,105 @@ function eventIcon(type: string) {
 export default function LiveTvDashboard() {
   const [matches, setMatches] = useState<Match[]>([]);
   const [selected, setSelected] = useState<Match | null>(null);
-  const [fixtureStats, setFixtureStats] = useState<any[]>([]);
-  const [fixtureEvents, setFixtureEvents] = useState<any[]>([]);
+  const [receivedStats, setFixtureStats] = useState<FixtureStatistics[]>([]);
+  const [receivedEvents, setFixtureEvents] = useState<FixtureEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [liveError, setLiveError] = useState<string | null>(null);
-  const [tick, setTick] = useState(Date.now());
+  const [tick, setTick] = useState(0);
+  const [detailsError, setDetailsError] = useState<string | null>(null);
   const [lastUpdate, setLastUpdate] = useState("--:--:--");
+  const [detailsId, setDetailsId] = useState<number | null>(null);
+  const fixtureStats = detailsId === selected?.id ? receivedStats : [];
+  const fixtureEvents = detailsId === selected?.id ? receivedEvents : [];
 
   useEffect(() => {
     const timer = setInterval(() => setTick(Date.now()), 30000);
     return () => clearInterval(timer);
   }, []);
 
-  async function loadLive() {
-    try {
-      const res = await fetch(`/api/live?t=${Date.now()}`, { cache: "no-store" });
-      const data = await res.json();
-
-      if (!res.ok || (data?.errors && Object.keys(data.errors).length > 0) || data?.error) {
-        const message = res.status === 429
-          ? "Límite de API-Football alcanzado. Espera a que se renueve la cuota."
-          : `No se pueden cargar los partidos (HTTP ${res.status}). Comprueba API-Football.`;
-        setLiveError(message);
-        setLoading(false);
-        return;
-      }
-      setLiveError(null);
-      const liveGames = Array.isArray(data.response)
-        ? data.response.map(mapApiFixtureToMatch)
-        : [];
-
-      setMatches(liveGames);
-
-      if (liveGames.length > 0) {
-        setSelected((current) => {
-          if (!current) return liveGames[0];
-          return liveGames.find((m: Match) => m.id === current.id) ?? liveGames[0];
-        });
-      } else {
-        setSelected(null);
-      }
-
-      setLastUpdate(new Date().toLocaleTimeString());
-      setLoading(false);
-    } catch (error) {
-      console.error("loadLive dashboard", error);
-      setLiveError("No se pudo conectar con el servicio de partidos.");
-      setLoading(false);
-    }
-  }
-
   useEffect(() => {
+    let active = true;
+    let pending = false;
+    async function loadLive() {
+      if (pending || !active) return;
+      pending = true;
+      try {
+        const res = await fetch("/api/live", { cache: "no-store" });
+        const data = await res.json();
+        if (!active) return;
+
+        if (!res.ok || (data?.errors && Object.keys(data.errors).length > 0) || data?.error || !Array.isArray(data?.response)) {
+          const message = res.status === 429
+            ? "Límite de API-Football alcanzado. Espera a que se renueve la cuota."
+            : `No se pueden cargar los partidos (HTTP ${res.status}). Comprueba API-Football.`;
+          setLiveError(message);
+          setLoading(false);
+          return;
+        }
+        setLiveError(data.stale ? "La actualización está pendiente o no está disponible; se muestra la última captura válida." : null);
+        const liveGames = Array.isArray(data.response)
+          ? data.response.map(mapApiFixtureToMatch)
+          : [];
+
+        setMatches(liveGames);
+
+        if (liveGames.length > 0) {
+          setSelected((current) => {
+            if (!current) return liveGames[0];
+            return liveGames.find((m: Match) => m.id === current.id) ?? liveGames[0];
+          });
+        } else {
+          setSelected(null);
+        }
+
+        setLastUpdate(new Date(data.cachedAt ?? Date.now()).toLocaleTimeString());
+        setLoading(false);
+      } catch (error) {
+        if (!active) return;
+        console.error("loadLive dashboard", error);
+        setLiveError("No se pudo conectar con el servicio de partidos.");
+        setLoading(false);
+      } finally {
+        pending = false;
+      }
+    }
+
     loadLive();
     const interval = setInterval(() => {
       if (document.visibilityState === "visible") loadLive();
-    }, 300000);
-    return () => clearInterval(interval);
+    }, 30000);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void loadLive();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => { active = false; clearInterval(interval); document.removeEventListener("visibilitychange", onVisible); };
   }, []);
 
+  const selectedId = selected?.id;
   useEffect(() => {
-    if (!selected) return;
+    if (!selectedId) return;
+    const controller = new AbortController();
+    let active = true;
 
     async function loadFixtureDetails() {
       try {
-        const res = await fetch(`/api/fixture?id=${selectedMatch.id}&t=${Date.now()}`, {
-          cache: "no-store",
+        const res = await fetch(`/api/fixture?id=${selectedId}`, {
+          cache: "no-store", signal: controller.signal,
         });
-
         const data = await res.json();
-        setFixtureStats(data.statistics ?? []);
-        setFixtureEvents(data.events ?? []);
-      } catch (error) {
-        console.error("fixture dashboard", error);
+        if (!active) return;
+        if (!res.ok || data.error || !Array.isArray(data.statistics) || !Array.isArray(data.events)) {
+          throw new Error("Estadísticas no disponibles temporalmente.");
+        }
+        setDetailsError(null);
+        setDetailsId(selectedId ?? null);
+        setFixtureStats(data.statistics);
+        setFixtureEvents(data.events);
+      } catch {
+        if (!active) return;
+        setFixtureStats([]);
+        setFixtureEvents([]);
+        setDetailsError("Estadísticas no disponibles temporalmente.");
       }
     }
 
@@ -142,8 +189,16 @@ export default function LiveTvDashboard() {
     const interval = setInterval(() => {
       if (document.visibilityState === "visible") loadFixtureDetails();
     }, 600000);
-    return () => clearInterval(interval);
-  }, [selected?.id]);
+    return () => { active = false; controller.abort(); clearInterval(interval); };
+  }, [selectedId]);
+
+  function selectMatch(match: Match) {
+    if (match.id === selectedId) return;
+    setFixtureStats([]);
+    setFixtureEvents([]);
+    setDetailsError(null);
+    setSelected(match);
+  }
 
   const selectedMatch = selected ?? matches[0] ?? null;
 
@@ -169,7 +224,7 @@ export default function LiveTvDashboard() {
   const homeXg = getStat(fixtureStats, selectedMatch.home, "expected_goals");
   const awayXg = getStat(fixtureStats, selectedMatch.away, "expected_goals");
 
-  const prediction: any = calculateLivePoisson({
+  const prediction: Prediction = calculateLivePoisson({
     homeScore: selectedMatch.homeScore,
     awayScore: selectedMatch.awayScore,
     minuteText: getLiveMinute(selectedMatch, tick),
@@ -195,9 +250,9 @@ export default function LiveTvDashboard() {
   const hasStats = fixtureStats.length > 0;
 
   return (
-    <main className="h-[100dvh] bg-[#03070b] text-white overflow-hidden p-3">
-      <div className="h-full grid grid-rows-[70px_1fr_34px] gap-3">
-        <header className="rounded-2xl bg-[#07111c] border border-white/10 px-5 py-3 grid grid-cols-[300px_1fr_260px] items-center shadow-[0_0_30px_rgba(0,255,120,.08)]">
+    <main className="min-h-[100dvh] xl:h-[100dvh] bg-[#03070b] text-white xl:overflow-hidden p-3">
+      <div className="h-full grid xl:grid-rows-[auto_minmax(0,1fr)_auto] gap-3">
+        <header className="rounded-2xl bg-[#07111c] border border-white/10 px-5 py-3 grid gap-3 lg:grid-cols-[300px_1fr_260px] items-center shadow-[0_0_30px_rgba(0,255,120,.08)]">
           <div className="flex items-center gap-5">
             <div>
              <div className="text-3xl font-black tracking-[0.28em]">IRVIN</div>
@@ -223,19 +278,23 @@ export default function LiveTvDashboard() {
 
           <div className="text-right">
             <div className="text-4xl font-black">{lastUpdate}</div>
-            <div className="text-white/50">Actualización automática</div>
+            <div className="text-white/50">Caché compartida cada 30 s · proveedor cada 5 min</div>
           </div>
         </header>
 
-        <section className="grid grid-cols-[250px_1fr_310px] gap-3 min-h-0">
+        <section className="grid xl:grid-cols-[250px_1fr_310px] gap-3 min-h-0">
           <aside className="rounded-2xl bg-[#07111c] border border-white/10 p-3 min-h-0 overflow-y-auto">
-            <div className="text-2xl font-black mb-4">PARTIDOS EN VIVO</div>
+            <div className="text-2xl font-black mb-4">PARTIDOS EN VIVO ({matches.length})</div>
+            {liveError && <p role="alert">{liveError} Se conserva la última lista recibida.</p>}
+            {detailsError && <p role="alert">{detailsError}</p>}
 
             <div className="space-y-3">
               {matches.map((m) => (
                 <button
                   key={m.id}
-                  onClick={() => setSelected(m)}
+                  onClick={() => selectMatch(m)}
+                  aria-pressed={selectedMatch.id === m.id}
+                  data-live-fixture-id={m.id}
                   className={`w-full rounded-xl p-3 text-left border ${
                     selectedMatch.id === m.id
                       ? "bg-green-500/15 border-green-400/50"
@@ -375,9 +434,9 @@ export default function LiveTvDashboard() {
               </div>
 
               <div className="mt-4 space-y-2">
-                {fixtureEvents.slice(-5).reverse().map((e: any, i: number) => (
+                {fixtureEvents.slice(-5).reverse().map((e: FixtureEvent, i: number) => (
                   <div key={i} className="rounded-xl bg-white/5 border border-white/10 p-3 text-sm flex justify-between gap-2">
-                    <span>{e.time?.elapsed}' {eventIcon(e.type)} {e.type}</span>
+                    <span>{e.time?.elapsed}&apos; {eventIcon(e.type)} {e.type}</span>
                     <span className="text-green-300 truncate">{e.player?.name ?? e.team?.name}</span>
                   </div>
                 ))}
@@ -386,7 +445,7 @@ export default function LiveTvDashboard() {
           </aside>
         </section>
 
-        <footer className="rounded-xl bg-[#07111c] border border-white/10 grid grid-cols-[1fr_1fr_1fr_180px] text-sm font-black overflow-hidden">
+        <footer className="rounded-xl bg-[#07111c] border border-white/10 grid gap-2 lg:grid-cols-[1fr_1fr_1fr_180px] text-sm font-black overflow-hidden">
           <div className="px-4 flex items-center text-yellow-300">
             🔔 ALERTAS&nbsp;
             <span className="text-white">
@@ -397,10 +456,10 @@ export default function LiveTvDashboard() {
             🔥 IA: {prediction.recommendation} · {actionText} · Confianza {prediction.confidence}%
           </div>
           <div className="px-4 flex items-center border-l border-white/10">
-            📊 {hasStats ? "Estadísticas avanzadas disponibles" : "Esta liga no ofrece estadísticas avanzadas"}
+            📊 {hasStats ? "Estadísticas avanzadas disponibles" : "Estadísticas pendientes o no disponibles"}
           </div>
           <div className="px-4 flex items-center justify-center border-l border-white/10 text-green-400">
-            DATOS CADA 5 MIN
+            LISTA CADA 30 S
           </div>
         </footer>
       </div>
@@ -427,7 +486,7 @@ function ScoreBoard({
 }: {
   match: Match;
   minute: string;
-  prediction: any;
+  prediction: Prediction;
 }) {
   return (
     <div className="rounded-2xl bg-[#07111c] border border-white/10 p-4">
@@ -488,7 +547,7 @@ function TeamBlock({
   );
 }
 
-function MetricCard({ title, value }: { title: string; value: any }) {
+function MetricCard({ title, value }: { title: string; value: React.ReactNode }) {
   return (
     <div className="h-36 rounded-xl bg-[#030b12] border border-white/10 p-4 flex flex-col items-center justify-center">
       <div className="text-white/40 text-sm font-black mb-4">{title}</div>
@@ -519,7 +578,7 @@ function BigPercent({
   red,
 }: {
   label: string;
-  value: any;
+  value: React.ReactNode;
   green?: boolean;
   red?: boolean;
 }) {

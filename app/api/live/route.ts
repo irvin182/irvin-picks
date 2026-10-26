@@ -1,23 +1,8 @@
-import { apiFootballFetch } from "@/lib/apiFootballFetch";
+import { readLiveFixtures, LIVE_POLL_SECONDS } from "@/lib/liveFixturesCache";
 import { NextRequest, NextResponse } from "next/server";
-import { unstable_cache } from "next/cache";
 import { getToken } from "next-auth/jwt";
 import { rateLimit, getClientIp } from "@/lib/security";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
-
-// Only validated data enters the cache. A failed refresh cannot replace good data with an error.
-const LIVE_CACHE_SECONDS = 300;
-const readLiveFromProvider = unstable_cache(
-  async () => {
-    const response = await apiFootballFetch("https://v3.football.api-sports.io/fixtures?live=all", {
-      signal: AbortSignal.timeout(10000),
-    });
-    const data = await response.json();
-    return { data, updatedAt: Date.now() };
-  },
-  ["irvin-live-fixtures-v3"],
-  { revalidate: LIVE_CACHE_SECONDS, tags: ["irvin-live-fixtures"] }
-);
 
 const ALLOWED_PLANS = ["beta", "premium", "vip"];
 
@@ -94,15 +79,15 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const result = await readLiveFromProvider();
+    const result = await readLiveFixtures();
     return NextResponse.json(
-      { ...result.data, cachedAt: result.updatedAt },
+      { ...result.data, cachedAt: result.updatedAt, stale: result.stale },
       { headers: { "Cache-Control": "private, no-store" } }
     );
   } catch {
     return NextResponse.json(
-      { error: "API-Football no disponible", retryAfterSeconds: LIVE_CACHE_SECONDS },
-      { status: 503, headers: { "Cache-Control": "private, no-store", "Retry-After": String(LIVE_CACHE_SECONDS) } }
+      { error: "API-Football no disponible", retryAfterSeconds: LIVE_POLL_SECONDS },
+      { status: 503, headers: { "Cache-Control": "private, no-store", "Retry-After": String(LIVE_POLL_SECONDS) } }
     );
   }
 }
