@@ -240,7 +240,7 @@ export default function LiveTvDashboard() {
     <main className={styles.page}>
       <div className={styles.shell}>
         <header className={styles.header}>
-          <div className={styles.brand}><span className={styles.brandMark}>IA</span><div><h1>IRVIN ANALYTICS</h1><p>Live TV · Análisis en directo</p></div></div>
+          <div className={styles.brand}><span className={styles.brandMark}>IA</span><div><h1><span>IRVIN</span> ANALYTICS</h1><p className={styles.terminalLabel}>PRO TERMINAL <span className={styles.version}>2.0</span></p></div></div>
           <div className={styles.headerMeta}>
             <span className={styles.liveBadge}>● {matches.length} partidos en vivo</span>
             <span className={styles.qualityBadge}>Datos: {dataQuality}</span>
@@ -249,10 +249,13 @@ export default function LiveTvDashboard() {
         </header>
 
         <div className={styles.layout}>
+          <div className={styles.scoreArea}>
+            <ScoreBoard match={selectedMatch} minute={getLiveMinute(selectedMatch)} prediction={prediction} />
+          </div>
           <aside className={styles.matchPanel} aria-label="Selector de partidos">
             <div className={styles.panelHeading}><h2>Partidos en vivo</h2><span>{matches.length}</span></div>
             {liveError && <p className={styles.alert} role="alert">{liveError} Se conserva la última lista recibida.</p>}
-            <div className={styles.matchList}>
+            <div className={styles.matchList} role="region" aria-label="Partidos disponibles; desplaza para ver más" tabIndex={0}>
               {matches.map(m => <button key={m.id} type="button" onClick={() => selectMatch(m)} aria-pressed={selectedMatch.id === m.id} data-live-fixture-id={m.id}
                 className={`${styles.matchButton} ${selectedMatch.id === m.id ? styles.selectedMatch : ""}`}>
                 <span className={styles.matchMeta}><span>{getLiveMinute(m)}</span><span>{liveValue(m.homeScore)} – {liveValue(m.awayScore)}</span></span>
@@ -264,7 +267,6 @@ export default function LiveTvDashboard() {
           </aside>
 
           <section className={styles.analysis} aria-label="Análisis del partido seleccionado">
-            <ScoreBoard match={selectedMatch} minute={getLiveMinute(selectedMatch)} prediction={prediction} />
             {detailsError && <p className={styles.alert} role="alert">{detailsError}</p>}
             <div className={styles.summaryLine} role="status"><span className={styles.qualityBadge}>Calidad {dataQuality}</span><span>Confianza no evaluable</span></div>
 
@@ -274,7 +276,7 @@ export default function LiveTvDashboard() {
               <MetricCard title="Tiros totales" value={`${liveValue(homeShots)} - ${liveValue(awayShots)}`} missing={homeShots == null || awayShots == null} note="Local / Visitante" />
             </div>
 
-            <h2 className={styles.sectionHeading}>Probabilidades del partido</h2>
+            <div className={styles.sectionTitle}><span className={styles.sectionIndex}>01</span><h2 className={styles.sectionHeading}>Mercados del partido</h2><span className={styles.sectionCaption}>Lectura estadística</span></div>
             <p className={styles.sectionNote}>Las estimaciones no están calibradas. «Observado» indica un resultado conocido según el marcador recibido.</p>
             <div className={styles.marketsGrid}>
               <MarketCard title="Resultado · 1X2">
@@ -317,8 +319,8 @@ export default function LiveTvDashboard() {
           </section>
 
           <aside className={styles.insights} aria-label="Estado del análisis y eventos">
-            <section className={styles.panel} data-ui-card>
-              <h2 className={styles.sectionHeading}>Lectura del análisis</h2>
+            <section className={`${styles.panel} ${styles.analysisPanel}`} data-ui-card>
+              <div className={styles.analysisHeading}><span className={styles.analysisSymbol} aria-hidden="true">⌁</span><div><span className={styles.eyebrow}>IRVIN ANALYTICS</span><h2 className={styles.sectionHeading}>Panel de análisis</h2></div></div>
               <div className={styles.recommendation} data-ui-card><span className={styles.eyebrow}>Recomendación</span><p>{prediction.recommendation ?? "Sin recomendación validada"}</p></div>
               <div className={styles.decisionsGrid}>
                 <DecisionBox title="Confianza" value="No evaluable" />
@@ -337,7 +339,7 @@ export default function LiveTvDashboard() {
             </section>
           </aside>
         </div>
-        <footer className={styles.footer}><span>IRVIN ANALYTICS · Live TV</span><span>Partido {selectedMatch.id} · {fixtureStats.length} equipos con estadísticas · {fixtureEvents.length} eventos</span></footer>
+        <footer className={styles.footer}><span>IRVIN ANALYTICS · PRO TERMINAL 2.0</span><span>Partido {selectedMatch.id} · {fixtureStats.length} equipos con estadísticas · {fixtureEvents.length} eventos</span></footer>
       </div>
     </main>
   );
@@ -348,14 +350,14 @@ function ScoreBoard({match, minute, prediction}: {match: Match; minute: string; 
     <p className={styles.league}>{match.country} · {match.league}</p>
     <div className={styles.scoreGrid}>
       <TeamBlock name={match.home} logo={match.homeFlag} side="Local" />
-      <div className={styles.scoreCenter}><span className={styles.liveBadge}>En vivo</span><div className={styles.score}>{liveValue(match.homeScore)}<span>–</span>{liveValue(match.awayScore)}</div><p>{minute} · {match.half}</p></div>
+      <div className={styles.scoreCenter}><span className={styles.liveBadge}>En vivo</span><div className={styles.score}><strong data-score-side="home">{liveValue(match.homeScore)}</strong><span>–</span><strong data-score-side="away">{liveValue(match.awayScore)}</strong></div><p>{minute} · {match.half}</p></div>
       <TeamBlock name={match.away} logo={match.awayFlag} side="Visitante" />
     </div>
     {prediction.homeWin == null && <p className={styles.emptyNote}>Resultado: no evaluable</p>}
   </section>;
 }
 function TeamBlock({name, logo, side}: {name: string; logo: string; side: string}) {
-  return <div className={styles.teamBlock}>{logo && <img src={logo} alt="" width={44} height={44} />}<span className={styles.eyebrow}>{side}</span><strong>{name}</strong></div>;
+  return <div className={styles.teamBlock} data-side={side === "Local" ? "home" : "away"}>{logo && <img src={logo} alt="" width={44} height={44} />}<span className={styles.eyebrow}>{side}</span><strong>{name}</strong></div>;
 }
 function MetricCard({title,value,missing,note}: {title: string; value: string; missing: boolean; note: string}) {
   return <section className={styles.metric} data-ui-card><h3>{title}</h3><p className={missing ? styles.missingMetric : styles.metricValue}>{value}</p><span className={styles.emptyNote}>{note}</span></section>;

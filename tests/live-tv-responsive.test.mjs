@@ -32,3 +32,24 @@ test('probability cards distinguish unavailable data, observed facts and uncalib
   assert.ok(complete.includes('Estimación'));
   assert.ok(complete.includes('estimación no calibrada'));
 });
+
+test('PRO TERMINAL 2.0 restores sporting identity without inventing data or confidence',()=>{
+  const {html}=renderLiveTvFixture();
+  assert.ok(html.includes('PRO TERMINAL'));
+  assert.ok(html.includes('2.0'));
+  assert.ok(html.includes('Panel de análisis'));
+  assert.ok(html.includes('data-score-side="home"'));
+  assert.ok(html.includes('data-score-side="away"'));
+  assert.ok(html.includes('Confianza no evaluable'));
+  assert.equal(html.includes('data-probability="estimated"'),false);
+});
+
+
+test('mobile uses a single accessible match rail and score before selection, with provider crests',()=>{
+  const {html}=renderLiveTvFixture({logos:true});
+  assert.equal((html.match(/aria-label="Marcador"/g)??[]).length,1);
+  assert.ok(html.indexOf('aria-label="Marcador"')<html.indexOf('aria-label="Selector de partidos"'));
+  assert.match(html,/role="region" aria-label="Partidos disponibles; desplaza para ver más" tabindex="0"/);
+  assert.equal((html.match(/data-live-fixture-id=/g)??[]).length,23);
+  assert.ok(html.includes('data:image/svg+xml,'));
+});

@@ -6,7 +6,7 @@ const root=fileURLToPath(new URL('../',import.meta.url)).replace(/\/$/,'');
 const {renderLiveTvFixture}=await import(pathToFileURL(root+'/tests/helpers/live-tv-render.mjs'));
 const dir=fs.mkdtempSync(os.tmpdir()+'/irvin-responsive-');
 for(const scenario of ['missing','partial','complete','known']){
- const {html,css}=renderLiveTvFixture({scenario});
+ const {html,css}=renderLiveTvFixture({scenario,logos:true,longNames:process.env.IRVIN_LAYOUT_SHORT_NAMES!=='1'});
  fs.writeFileSync(`${dir}/${scenario}.html`,`<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0} ${css}</style></head><body>${html}</body></html>`);
 }
 // Isolated profile; HTTP/HTTPS are blocked before opening any fixture. Never uses a real session.
@@ -26,9 +26,9 @@ try{
  const call=(method,params)=>send(method,params,sessionId);
  await call('Page.enable');await call('Network.enable');await call('Network.setBlockedURLs',{urls:['http://*','https://*']});
  const results=[];
- for(const width of [320,360,390,600,768,1024,1280,1440,1920])for(const scenario of ['missing','partial','complete','known']){
-  const height=({320:568,360:800,390:844,600:800,768:1024,1024:768,1280:720,1440:900,1920:1080})[width];
-  await call('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:false});
+ for(const [width,height] of [[320,568],[375,812],[390,844],[430,932],[768,1024],[1440,900],[1920,1080],[568,320],[812,375],[844,390],[932,430],[1024,768]])for(const scenario of ['missing','partial','complete','known']){
+  await call('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:width<960});
+  await call('Emulation.setTouchEmulationEnabled',{enabled:width<960});
   await call('Page.navigate',{url:pathToFileURL(`${dir}/${scenario}.html`).href});
   for(let i=0;i<100;i++){
    const state=await call('Runtime.evaluate',{expression:'document.readyState',returnByValue:true});if(state.result.value==='complete')break;await new Promise(r=>setTimeout(r,20));
@@ -39,7 +39,8 @@ try{
     const bad=[];const visible=e=>e.getClientRects().length>0&&e.getBoundingClientRect().height>0;
     for(const e of document.querySelectorAll('[data-ui-card],[data-probability],.matchButton,.header,.teamBlock,.methodologyBody')){
       if(!visible(e))continue;const r=e.getBoundingClientRect();
-      if(r.left < -1 || r.right > innerWidth+1 || e.scrollWidth>e.clientWidth+1 || e.scrollHeight>e.clientHeight+1)bad.push({class:e.className,text:e.textContent.slice(0,90),width:e.clientWidth,scroll:e.scrollWidth,height:e.clientHeight,scrollHeight:e.scrollHeight});
+      const inRail=e.matches('.matchButton')&&innerWidth<960;
+      if((!inRail&&(r.left < -1 || r.right > innerWidth+1)) || e.scrollWidth>e.clientWidth+1 || e.scrollHeight>e.clientHeight+1)bad.push({class:e.className,text:e.textContent.slice(0,90),width:e.clientWidth,scroll:e.scrollWidth,height:e.clientHeight,scrollHeight:e.scrollHeight});
     }
     for(const group of document.querySelectorAll('.probabilityGrid,.metricsGrid,.decisionsGrid,.scoreGrid')){
      const children=[...group.children].filter(visible);
@@ -48,12 +49,42 @@ try{
       if(Math.min(a.right,b.right)-Math.max(a.left,b.left)>1&&Math.min(a.bottom,b.bottom)-Math.max(a.top,b.top)>1)bad.push({overlap:group.className});
      }
     }
+    const rail=document.querySelector('.matchList');
+    if(innerWidth<960){
+      if(getComputedStyle(rail).overflowX!=='auto')bad.push({rail:'not scrollable'});
+      for(const button of rail.children)if(button.getBoundingClientRect().height<44)bad.push({touch:'too small'});
+      rail.scrollLeft=rail.scrollWidth;
+      const last=rail.lastElementChild.getBoundingClientRect(),bounds=rail.getBoundingClientRect();
+      if(last.right>bounds.right+1||last.left<bounds.left-1)bad.push({rail:'last match inaccessible'});
+      rail.scrollLeft=0;
+      const score=document.querySelector('.scoreArea').getBoundingClientRect(),panel=document.querySelector('.matchPanel').getBoundingClientRect();
+      if(score.bottom>panel.top+1)bad.push({order:'score must precede match selector'});
+    }
     return {viewport:innerWidth,pageWidth:document.documentElement.scrollWidth,buttons:document.querySelectorAll('[data-live-fixture-id]').length,bad};
    })()`});
    const row={width,height,scenario,expanded,...result.value};results.push(row);
   }
-  if((width===390&&scenario==='missing')||(width===1440&&scenario==='complete')){
-    await call('Runtime.evaluate',{expression:'document.querySelector("details").open=false'});
+  if(width===390&&scenario==='complete'){
+    const {result:position}=await call('Runtime.evaluate',{returnByValue:true,expression:`(()=>{const rail=document.querySelector('.matchList');rail.scrollIntoView({block:'center'});const r=rail.getBoundingClientRect();return {x:r.left+r.width/2,y:r.top+r.height/2};})()`});
+    await call('Input.synthesizeScrollGesture',{...position.value,xDistance:-220,yDistance:0,gestureSourceType:'touch'});
+    const {result:touch}=await call('Runtime.evaluate',{returnByValue:true,expression:`document.querySelector('.matchList').scrollLeft>0`});
+    if(!touch.value)results.at(-1).bad.push({touch:'swipe did not move selector'});
+    await call('Runtime.evaluate',{expression:`document.querySelector('.matchList').lastElementChild.focus();document.querySelector('details summary').focus()`});
+    await call('Input.dispatchKeyEvent',{type:'keyDown',key:' ',code:'Space',windowsVirtualKeyCode:32});
+    await call('Input.dispatchKeyEvent',{type:'keyUp',key:' ',code:'Space',windowsVirtualKeyCode:32});
+    const {result:keyboard}=await call('Runtime.evaluate',{returnByValue:true,expression:`document.querySelector('details').open===false`});
+    // The last layout check leaves details open; Space must close it.
+    if(!keyboard.value)results.at(-1).bad.push({keyboard:'methodology toggle failed'});
+    await call('Runtime.evaluate',{expression:`document.activeElement.blur();document.querySelector('.matchList').style.scrollSnapType='none';document.querySelector('.matchList').scrollLeft=0;window.scrollTo(0,0)`});
+  }
+  if((width===390&&scenario==='complete')||(width===1440&&scenario==='complete')){
+    // Capture the initial view, independent of scroll momentum from the interaction test.
+    await call('Page.navigate',{url:pathToFileURL(`${dir}/${scenario}.html`).href+'?capture=initial'});
+    for(let i=0;i<100;i++){
+      const {result}=await call('Runtime.evaluate',{expression:'document.readyState==="complete" && !!document.querySelector(".matchList")',returnByValue:true});
+      if(result.value)break;await new Promise(resolve=>setTimeout(resolve,20));
+    }
+    await call('Runtime.evaluate',{expression:'document.querySelector("details").open=false;new Promise(resolve=>setTimeout(resolve,250))',awaitPromise:true});
     await call('Runtime.evaluate',{expression:'new Promise(requestAnimationFrame)',awaitPromise:true});
     const {cssContentSize}=await call('Page.getLayoutMetrics');
     const {data}=await call('Page.captureScreenshot',{format:'png',captureBeyondViewport:true,clip:{x:0,y:0,width,height:Math.ceil(cssContentSize.height),scale:1}});fs.writeFileSync(`${dir}/${width}-${scenario}.png`,Buffer.from(data,'base64'));
