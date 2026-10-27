@@ -4,8 +4,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { apiGet, computeLambdasFromFixture } from "@/app/utils/stats";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
+import styles from "./TodayReport.module.css";
 
 type FixtureApi = {
   fixture: { id: number; date: string };
@@ -57,6 +56,8 @@ type AutoProgress = {
   done: number;
   total: number;
   currentLabel: string;
+  fixturesDone?: number;
+  fixtureTotal?: number;
 };
 
 const CHUNK_SIZE = 10;
@@ -240,7 +241,15 @@ export default function InformeHoy() {
 
 
 
-  const generateAnalysisPdf = () => {
+  const generateAnalysisPdf = async () => {
+  if (pdfPending.current) return;
+  pdfPending.current = true;
+  setPdfLoading(true);
+  setPdfError(null);
+  try {
+  const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+    import("jspdf"), import("jspdf-autotable"),
+  ]);
   const doc = new jsPDF("p", "mm", "a4");
 
   let y = 10;
@@ -313,6 +322,12 @@ export default function InformeHoy() {
   });
 
   doc.save(`Irvin_Analytics_${selectedDate}.pdf`);
+  } catch {
+    setPdfError("No se pudo descargar el PDF. Puedes volver a intentarlo sin repetir el análisis.");
+  } finally {
+    pdfPending.current = false;
+    setPdfLoading(false);
+  }
 };
   const [printMode, setPrintMode] = useState<"analysis" | "live" | null>(null);
   const [selectedDate, setSelectedDate] = useState<string>(fmtDateISO(new Date()));
@@ -329,9 +344,13 @@ export default function InformeHoy() {
     currentLabel: "",
   });
 
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
   const cancelRef = useRef(false);
   const inFlightParts = useRef(new Set<string>());
   const completedParts = useRef(new Set<string>());
+  const autoPending = useRef(false);
+  const pdfPending = useRef(false);
 
   async function loadFixtures() {
     try {
@@ -421,12 +440,14 @@ async function handleGeneratePart(league: LeagueGroup, partIndex: number) {
       }
 
   if (L.meta.source === "generic_fallback" || L.meta.source === "error") {
-        L = {
-          lambdaHome: 1.2,
-          lambdaAway: 1.0,
-          meta: { source: "fallback_used" },
-        };
-      }
+  omitted.push({
+    name: `${f.teams.home.name} vs ${f.teams.away.name}`,
+    league: league.leagueName,
+    reason: "Datos estadísticos insuficientes para generar una predicción fiable",
+  });
+
+  return;
+}
 
       const lH = L.lambdaHome;
       const lA = L.lambdaAway;
@@ -574,14 +595,16 @@ async function handleGeneratePart(league: LeagueGroup, partIndex: number) {
 
 
 
- async function autoGenerateAll() {
-  if (autoProg.running) return;
+ async function autoGenerateAll(targetLeagues: LeagueGroup[] = leagues) {
+  if (autoPending.current || inFlightParts.current.size > 0) return;
+  autoPending.current = true;
+  try {
 
   cancelRef.current = false;
 
   const allKeys: { lg: LeagueGroup; idx: number }[] = [];
 
-  for (const lg of leagues) {
+  for (const lg of targetLeagues) {
     const partsCount = Math.ceil(lg.fixtures.length / CHUNK_SIZE);
 
     for (let idx = 0; idx < partsCount; idx++) {
@@ -601,7 +624,9 @@ if (!completedParts.current.has(`${selectedDate}:${key}`) && (!part || (!part.lo
     running: true,
     done: 0,
     total: allKeys.length,
-    currentLabel: "Iniciando análisis optimizado…",
+    currentLabel: "Iniciando análisis…",
+    fixturesDone: 0,
+    fixtureTotal: allKeys.reduce((sum, { lg, idx }) => sum + lg.fixtures.slice(idx * CHUNK_SIZE, (idx + 1) * CHUNK_SIZE).length, 0),
   });
 
   for (let i = 0; i < allKeys.length; i++) {
@@ -619,6 +644,7 @@ if (!completedParts.current.has(`${selectedDate}:${key}`) && (!part || (!part.lo
     setAutoProg((p) => ({
       ...p,
       done: p.done + 1,
+      fixturesDone: (p.fixturesDone ?? 0) + lg.fixtures.slice(idx * CHUNK_SIZE, (idx + 1) * CHUNK_SIZE).length,
     }));
 
     await sleep(150);
@@ -629,6 +655,9 @@ if (!completedParts.current.has(`${selectedDate}:${key}`) && (!part || (!part.lo
     running: false,
     currentLabel: cancelRef.current ? "Cancelado" : "Completado",
   }));
+  } finally {
+    autoPending.current = false;
+  }
 }
 
 
@@ -654,287 +683,67 @@ if (!completedParts.current.has(`${selectedDate}:${key}`) && (!part || (!part.lo
   const pct = (v?: number | null) =>
     Number.isFinite(v) ? `${(v! * 100).toFixed(1)}%` : "—";
 
+  const analyzing = autoProg.running || Object.values(parts).some(part => part.loading);
+  const visibleCount = leagues.reduce((sum, league) => sum + league.fixtures.length, 0);
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-black via-zinc-950 to-black text-zinc-100 px-4 py-6 print:bg-white print:text-black">
-      <header className="max-w-6xl mx-auto mb-6 flex items-center gap-3 print:hidden">
-        <img
-          src="/logo-irvin.png"
-          alt="Irvin Analytics"
-          className="h-16 w-16 rounded-xl object-contain"
-        />
-
-        <div>
-          <p className="tracking-[4px] text-cyan-400 font-black text-[10px] uppercase">
-            IRVIN ANALYTICS
-          </p>
-
-          <h1 className="text-2xl md:text-3xl font-extrabold tracking-wide">
-            Informe de partidos — <span className="text-amber-300">HOY</span>
-          </h1>
-
-          <p className="text-xs text-zinc-400 mt-1">
-            <span className="font-semibold text-amber-300">Irvin Analytics</span>{" "}
-            · Fiabilidad de liga + filtros pro.
-          </p>
+      <div className={`${styles.screen} print:hidden`}>
+        <header className={styles.header}>
+          <div className={styles.brand}><span aria-hidden="true">IA</span> IRVIN ANALYTICS <small>RESEARCH / MATCHDAY</small></div>
+          <div className={styles.heading}><div><p className={styles.eyebrow}>INFORME DE PARTIDOS · HOY</p><h1>El juego, <span>en perspectiva.</span></h1><p>Selecciona tu liga. Analiza el contexto. Exporta tu informe.</p></div><div className={styles.count}><span><b>{fixtures.length}</b> PARTIDOS</span><span><b>{groupByLeague(fixtures).length}</b> LIGAS</span><small>Porcentajes del modelo actual · sin resultados estimados</small></div></div>
+        </header>
+        <div className={styles.workspace}><section className={styles.console} aria-label="Consola de análisis"><div className={styles.sectionTitle}><span>01 / CONTROL DE JORNADA</span><h2>Tu análisis empieza aquí</h2><p>Acota una competición o analiza la jornada completa.</p></div><section className={styles.controls} aria-label="Seleccionar alcance del informe">
+          <label>Fecha<input type="date" value={selectedDate} disabled={analyzing || pdfLoading} onChange={e => setSelectedDate(e.target.value)} /></label>
+          <label className={styles.search}>Buscar liga / país<input type="search" value={searchLeague} disabled={analyzing || pdfLoading} onChange={e => setSearchLeague(e.target.value)} placeholder="Liga o país…" /></label>
+          <button type="button" className={styles.primary} onClick={() => autoGenerateAll()} disabled={loading || analyzing || pdfLoading || visibleCount === 0}>Analizar ligas visibles ({visibleCount})</button>
+          <button type="button" onClick={() => autoGenerateAll(groupByLeague(fixtures).sort((a,b) => a.leagueName.localeCompare(b.leagueName)))} disabled={loading || analyzing || pdfLoading || fixtures.length === 0}>Analizar informe completo ({fixtures.length})</button>
+        </section>
+        <p className={styles.scope}>El análisis visible procesa solo las ligas del filtro. El informe completo incluye todos los partidos. Los PDF respetan el filtro actual.</p>
+        <div className={styles.status} role="status">{status}</div>
+        {(autoProg.running || autoProg.total > 0) && <section className={styles.progress} aria-label="Progreso del análisis" aria-live="polite"><div><strong>{autoProg.running ? "Preparando el informe" : autoProg.currentLabel}</strong><span>Tanda: {autoProg.fixturesDone ?? 0} / {autoProg.fixtureTotal ?? 0} partidos · {autoProg.done} / {autoProg.total} bloques</span></div><div className={styles.track} role="progressbar" aria-label="Bloques procesados" aria-valuemin={0} aria-valuemax={autoProg.total} aria-valuenow={autoProg.done}><span style={{width:`${progressPct}%`}} /></div><p>{autoProg.currentLabel} · Ritmo de consultas protegido</p></section>}
+        </section><section className={styles.export} aria-label="Centro de informes PDF"><div className={styles.sectionTitle}><span>02 / INFORMES PDF</span><h2>Del análisis al informe</h2><p>Exporta los partidos analizados del filtro actual. La descarga se prepara al solicitarla.</p></div><div className={styles.pdfActions} aria-label="Exportar informe">
+          <button type="button" onClick={() => {
+            setPrintMode("analysis");
+            const cleanPrint = () => { setPrintMode(null); window.removeEventListener("afterprint", cleanPrint); };
+            window.addEventListener("afterprint", cleanPrint);
+            setTimeout(() => { window.print(); setTimeout(cleanPrint, 1500); }, 300);
+          }}>PDF ANÁLISIS</button>
+          <button type="button" onClick={generateAnalysisPdf} disabled={pdfLoading}>{pdfLoading ? "Preparando PDF…" : "Descargar PDF análisis"}</button>
+          <button type="button" onClick={() => {
+            setPrintMode("live");
+            const cleanPrint = () => { setPrintMode(null); window.removeEventListener("afterprint", cleanPrint); };
+            window.addEventListener("afterprint", cleanPrint);
+            setTimeout(() => { window.print(); setTimeout(cleanPrint, 1500); }, 300);
+          }}>PDF en vivo</button>
         </div>
-      </header>
-
-      <section className="max-w-6xl mx-auto mb-5 flex flex-col md:flex-row md:items-center gap-3 print:hidden">
-        <div className="flex items-center gap-2">
-          <label className="text-xs text-zinc-400">Fecha</label>
-
-          <input
-            type="date"
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
-            className="bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white"
-          />
-        </div>
-
-        <button
-          type="button"
-          onClick={autoGenerateAll}
-          disabled={loading || autoProg.running}
-          className="rounded-xl bg-amber-400 px-4 py-2 text-sm font-black text-black disabled:opacity-50"
-        >
-          {autoProg.running
-            ? `Analizando ${autoProg.done}/${autoProg.total}`
-            : "Iniciar análisis"}
-        </button>
-
-        <button
-          type="button"
-
-    onClick={() => {
-  setPrintMode("analysis");
-
-  const cleanPrint = () => {
-    setPrintMode(null);
-    window.removeEventListener("afterprint", cleanPrint);
-  };
-
-  window.addEventListener("afterprint", cleanPrint);
-
-  setTimeout(() => {
-    window.print();
-
-    setTimeout(() => {
-      cleanPrint();
-    }, 1500);
-
-  }, 300);
-}}
-
-
-          className="rounded-xl bg-cyan-400 px-4 py-2 text-sm font-black text-black"
-        >
-          PDF ANÁLISIS
-        </button>
-
-        <button
-  type="button"
-  onClick={generateAnalysisPdf}
-  className="rounded-xl bg-green-500 px-4 py-2 text-sm font-black text-black"
->
-  Descargar PDF análisis ⚡ (rápido)
-</button>
-
-  <button
-  type="button"
-  onClick={() => {
-    setPrintMode("live");
-
-    const cleanPrint = () => {
-      setPrintMode(null);
-      window.removeEventListener("afterprint", cleanPrint);
-    };
-
-    window.addEventListener("afterprint", cleanPrint);
-
-    setTimeout(() => {
-      window.print();
-
-      // fallback por si Chrome falla
-      setTimeout(() => {
-        cleanPrint();
-      }, 1500);
-
-    }, 300);
-  }}
-  className="rounded-xl px-4 py-2 text-sm font-black text-white"
->
-  PDF en vivo
-</button>
-
-        <div className="flex-1 flex items-center gap-2">
-          <label className="text-xs text-zinc-400">Buscar liga / país</label>
-
-          <input
-            type="text"
-            value={searchLeague}
-            onChange={(e) => setSearchLeague(e.target.value)}
-            placeholder="Ej. Primera A, Champions, México..."
-            className="flex-1 bg-black/50 border border-white/10 rounded-lg px-3 py-1.5 text-sm"
-          />
-        </div>
-
-        <div className="inline-flex items-center gap-2 text-xs px-3 py-2 rounded-full bg-black/60 border border-emerald-500/30">
-          <span className="inline-block w-2 h-2 rounded-full bg-emerald-400" />
-          <span>{status}</span>
-        </div>
-      </section>
-
-      {autoProg.running && (
-        <div className="print:hidden max-w-6xl mx-auto mb-5">
-          <div className="h-2 w-full rounded-full bg-zinc-800 overflow-hidden">
-            <div
-              className="h-full rounded-full bg-emerald-400 transition-all"
-              style={{ width: `${progressPct}%` }}
-            />
-          </div>
-
-          <p className="mt-1 text-xs text-zinc-400">
-            {progressPct}% · {autoProg.currentLabel}
-          </p>
-        </div>
-      )}
-
-      <main className="min-h-screen bg-black text-white print:bg-white print:text-black">
-        <div className="print:hidden">
-          {leagues.map((lg) => {
-            const total = lg.fixtures.length;
-            const partsCount = Math.ceil(total / CHUNK_SIZE);
-
-            return (
-              <section
-                key={lg.leagueId}
-                className="rounded-[28px] border border-white/10 bg-zinc-950/80 p-6 mb-6"
-              >
-                <h2 className="text-lg font-semibold flex items-center gap-2">
-                {lg.country ? `${lg.country} · ` : ""}{lg.leagueName}
-                  {lg.country && (
-                    <span className="text-zinc-400 text-sm">({lg.country})</span>
-                  )}
-                </h2>
-
-                <p className="text-xs text-zinc-400 mb-4">
-                  Liga ID: {lg.leagueId} · Partidos este día: {total}
-                </p>
-
-                {Array.from({ length: partsCount }).map((_, idx) => {
-                  const start = idx * CHUNK_SIZE;
-                  const end = Math.min(start + CHUNK_SIZE, total);
-                  const key = `${lg.leagueId}-${idx}`;
-                  const part = parts[key];
-
-                  return (
-                    <div
-                      key={key}
-                      className="rounded-2xl bg-black/60 border border-white/10 p-4 mb-4"
-                    >
-                      <div className="flex justify-between items-center mb-3">
-                        <div>
-                          <div className="text-sm font-semibold">Parte {idx + 1}</div>
-                          <div className="text-xs text-zinc-400">
-                            Partidos {start + 1}–{end}
-                          </div>
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={() => handleGeneratePart(lg, idx)}
-                          disabled={part?.loading}
-                          className="px-3 py-1.5 rounded-full bg-amber-400 text-black text-xs font-semibold"
-                        >
-                          {part?.loading
-                            ? "Calculando..."
-                            : "Generar informe de esta parte"}
-                        </button>
-                      </div>
-
-                      {part?.rows.map((m) => {
-                        const evalRes = evaluateMatch(m);
-
-                        return (
-                          <div
-                            key={m.id}
-                            className="rounded-xl border border-white/10 bg-zinc-950/80 px-3 py-3 mb-2"
-                          >
-                            <div className="grid grid-cols-[70px_1fr_110px] gap-2 items-center">
-                              <div>
-                                <div className="font-black">{m.timeEs}</div>
-                                <div className="text-[11px] text-zinc-500">
-                                  {m.timeUTC} UTC
-                                </div>
-                              </div>
-
-                              <div>
-                                <div className="font-bold">
-                                  {m.home}{" "}
-                                  <span className="text-amber-300">vs</span>{" "}
-                                  {m.away}
-                                </div>
-
-                                <div className="text-[11px] text-zinc-400">
-                                  {evalRes.reason}
-                                </div>
-                              </div>
-
-                              <span className="rounded-full px-3 py-1 text-xs font-black bg-zinc-800 text-zinc-300 text-center">
-                                {evalRes.label}
-                              </span>
-                            </div>
-
-                            <div className="mt-2 grid grid-cols-3 gap-2 text-center">
-                              <div className="rounded-lg bg-zinc-900 px-2 py-1">
-                                <div className="text-[10px] text-zinc-500">1</div>
-                                <div className="font-black">{pct(m.pH)}</div>
-                              </div>
-
-                              <div className="rounded-lg bg-zinc-900 px-2 py-1">
-                                <div className="text-[10px] text-zinc-500">X</div>
-                                <div className="font-black">{pct(m.pD)}</div>
-                              </div>
-
-                              <div className="rounded-lg bg-zinc-900 px-2 py-1">
-                                <div className="text-[10px] text-zinc-500">2</div>
-                                <div className="font-black">{pct(m.pA)}</div>
-                              </div>
-                            </div>
-
-                            <div className="mt-2 grid grid-cols-3 gap-2 text-center">
-                              <div className="rounded-lg bg-amber-500/10 border border-amber-400/20 px-2 py-2">
-                                <div className="text-[10px] text-amber-300">O1.5</div>
-                                <div className="font-black text-lg text-amber-300">
-                                  {pct(m.pOver15)}
-                                </div>
-                              </div>
-
-                              <div className="rounded-lg bg-cyan-500/10 border border-cyan-400/20 px-2 py-2">
-                                <div className="text-[10px] text-cyan-300">O2.5</div>
-                                <div className="font-black text-lg text-cyan-300">
-                                  {pct(m.pOver25)}
-                                </div>
-                              </div>
-
-                              <div className="rounded-lg bg-violet-500/10 border border-violet-400/20 px-2 py-2">
-                                <div className="text-[10px] text-violet-300">O3.5</div>
-                                <div className="font-black text-lg text-violet-300">
-                                  {pct(m.pOver35)}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  );
-                })}
-              </section>
-            );
-          })}
-        </div>
-
+        {pdfError && <p className={styles.error} role="alert">{pdfError}</p>}</section></div><div className={styles.resultsHeading}><div><span>03 / MESA DE ANÁLISIS</span><h2>Lectura de la jornada</h2></div><p>{visibleCount} partidos en el filtro actual</p></div>
+        <main>
+          {!loading && leagues.length === 0 && <p className={styles.empty}>No hay partidos para este filtro.</p>}
+          {leagues.map(lg => <section key={lg.leagueId} className={styles.league} aria-label={lg.leagueName}>
+            <div className={styles.leagueHeader}><div><h2>{lg.country ? `${lg.country} · ` : ""}{lg.leagueName}</h2><p>{lg.fixtures.length} partidos · Liga {lg.leagueId}</p></div><button type="button" onClick={() => autoGenerateAll([lg])} disabled={loading || analyzing || pdfLoading}>Analizar esta liga</button></div>
+            {Array.from({length:Math.ceil(lg.fixtures.length / CHUNK_SIZE)}).map((_,idx) => {
+              const key = `${lg.leagueId}-${idx}`;
+              const part = parts[key];
+              return <div key={key} className={styles.part}>
+                <div className={styles.partHeader}><span>Parte {idx+1} · Partidos {idx*CHUNK_SIZE+1}–{Math.min((idx+1)*CHUNK_SIZE,lg.fixtures.length)}</span><button type="button" onClick={() => handleGeneratePart(lg,idx)} disabled={loading || analyzing || pdfLoading}>{part?.loading ? "Calculando…" : "Generar informe de esta parte"}</button></div>
+                <div className={styles.matches}>{part?.rows.map(m => {
+                  const evaluation = evaluateMatch(m);
+                  return <article key={m.id} className={styles.match} data-report-fixture={m.id}>
+                    <div className={styles.matchMeta}><span>{lg.leagueName}</span><time dateTime={m.date}>{m.timeEs} ES <small>· {m.timeUTC} UTC</small></time></div>
+                    <h3 className={styles.teams}><span><i className={styles.monogram} aria-hidden="true">{m.home.split(/\s+/).slice(0,2).map(word => word[0]).join("").toUpperCase()}</i><b>{m.home}</b></span><small>vs</small><span><i className={styles.monogram} aria-hidden="true">{m.away.split(/\s+/).slice(0,2).map(word => word[0]).join("").toUpperCase()}</i><b>{m.away}</b></span></h3>
+                    <div className={styles.marketTitle}>RESULTADO · 1 / X / 2 <span>Probabilidad del modelo</span></div><div className={styles.markets} aria-label="Probabilidades 1 X 2">{[["LOCAL · 1",m.pH],["EMPATE · X",m.pD],["VISITANTE · 2",m.pA]].map(([label,value]) => <div key={String(label)}><small>{label}</small><strong>{pct(Number(value))}</strong><span className={styles.meter} aria-hidden="true"><i style={{width:`${Number(value)*100}%`}} /></span></div>)}</div>
+                    <div className={styles.goals} aria-label="Probabilidades de goles">{[["O1.5",m.pOver15],["O2.5",m.pOver25],["O3.5",m.pOver35],["BTTS",m.pBTTS]].map(([label,value]) => <div key={String(label)}><small>{label}</small><strong>{pct(Number(value))}</strong></div>)}</div>
+                    <footer><span className={evaluation.status === "GREEN" ? styles.green : evaluation.status === "YELLOW" ? styles.yellow : styles.risk}>{evaluation.label}</span><span>Goles esperados <b>{m.lambdaH.toFixed(1)} / {m.lambdaA.toFixed(1)}</b></span></footer><p className={styles.reason}>{evaluation.reason}</p>
+                  </article>;
+                })}</div>
+                {part && part.omitted.length > 0 && <p className={styles.omitted}>{part.omitted.length} partidos omitidos en esta parte.</p>}
+              </div>;
+            })}
+          </section>)}
+        </main>
+      </div>
+      <main className="bg-black text-white print:bg-white print:text-black">
         {/* PDF ANÁLISIS */}
         {printMode === "analysis" && <div className="block print:block">
           <div className="pdf-header">
