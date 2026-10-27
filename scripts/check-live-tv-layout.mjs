@@ -52,9 +52,9 @@ try{
     const rail=document.querySelector('.matchList');
     if(innerWidth<960){
       if(getComputedStyle(rail).overflowX!=='auto')bad.push({rail:'not scrollable'});
-      for(const button of rail.children)if(button.getBoundingClientRect().height<44)bad.push({touch:'too small'});
+      for(const button of rail.querySelectorAll("[data-live-fixture-id]"))if(button.getBoundingClientRect().height<44)bad.push({touch:'too small'});
       rail.scrollLeft=rail.scrollWidth;
-      const last=rail.lastElementChild.getBoundingClientRect(),bounds=rail.getBoundingClientRect();
+      const last=[...rail.querySelectorAll("[data-live-fixture-id]")].at(-1).getBoundingClientRect(),bounds=rail.getBoundingClientRect();
       if(last.right>bounds.right+1||last.left<bounds.left-1)bad.push({rail:'last match inaccessible'});
       rail.scrollLeft=0;
       const score=document.querySelector('.scoreArea').getBoundingClientRect(),panel=document.querySelector('.matchPanel').getBoundingClientRect();
@@ -69,7 +69,7 @@ try{
     await call('Input.synthesizeScrollGesture',{...position.value,xDistance:-220,yDistance:0,gestureSourceType:'touch'});
     const {result:touch}=await call('Runtime.evaluate',{returnByValue:true,expression:`document.querySelector('.matchList').scrollLeft>0`});
     if(!touch.value)results.at(-1).bad.push({touch:'swipe did not move selector'});
-    await call('Runtime.evaluate',{expression:`document.querySelector('.matchList').lastElementChild.focus();document.querySelector('details summary').focus()`});
+    await call('Runtime.evaluate',{expression:`[...document.querySelectorAll('[data-live-fixture-id]')].at(-1).focus();document.querySelector('details summary').focus()`});
     await call('Input.dispatchKeyEvent',{type:'keyDown',key:' ',code:'Space',windowsVirtualKeyCode:32});
     await call('Input.dispatchKeyEvent',{type:'keyUp',key:' ',code:'Space',windowsVirtualKeyCode:32});
     const {result:keyboard}=await call('Runtime.evaluate',{returnByValue:true,expression:`document.querySelector('details').open===false`});

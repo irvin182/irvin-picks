@@ -7,6 +7,7 @@ import React from 'react';
 import { compareLiveTv } from '../scripts/diagnose-live-tv.mjs';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
+let navigationModule;
 function load(file, imports, globals = {}) {
   const exports = {};
   const code = ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: {
@@ -15,6 +16,7 @@ function load(file, imports, globals = {}) {
   }}).outputText;
   vm.runInNewContext(code, { exports, require: name => {
     if (name in imports) return imports[name];
+    if (name === "@/lib/liveNavigation") return navigationModule ??= load("lib/liveNavigation.ts", {}, {URLSearchParams});
     if (name.endsWith('.module.css')) return new Proxy({}, {get: (_, key) => key === '__esModule' ? false : String(key)});
     if (name === 'react/jsx-runtime') return require(name);
     throw new Error(`Unexpected import ${name}`);
@@ -28,22 +30,22 @@ const matches = ['1H', 'HT', '2H', 'ET'].map((half, index) => ({
   country: `Country ${index}`, home: `Home ${index}`, away: `Away ${index}`,
   homeScore: 0, awayScore: 0, homeFlag: '', awayFlag: '', apiUpdatedAt: Date.now(),
 }));
-function dashboard(selected = matches[0], fetch = async () => Response.json({statistics: [], events: []}), initialMatches = matches) {
-  const values = [initialMatches, selected, [], [], false, null, Date.now(), null, '12:00:00', selected.id];
+function dashboard(selected = matches[0], fetch = async () => Response.json({statistics: [], events: []}), initialMatches = matches, globals = {}) {
+  const values = [initialMatches, selected, [], [], false, null, Date.now(), null, '12:00:00', selected?.id ?? null];
   const writes = [], effects = [];
   let index = 0;
   const component = load('components/ui/LiveTvDashboard.tsx', {
     react: {...React, useState: () => { const slot = index++; return [values[slot], value => { writes.push([slot, value]); values[slot] = typeof value === 'function' ? value(values[slot]) : value; }]; }, useEffect: fn => effects.push(fn)},
     '@/lib/liveData': liveData,
     '@/lib/livePoisson': {calculateLivePoisson: () => ({})},
-  }, { fetch, setInterval: () => 1, clearInterval: () => {}, document: {visibilityState: 'visible', addEventListener: () => {}, removeEventListener: () => {}} }).default;
+  }, { fetch, setInterval: () => 1, clearInterval: () => {}, document: {visibilityState: 'visible', addEventListener: () => {}, removeEventListener: () => {}}, ...globals }).default;
   const render = () => { index = 0; effects.length = 0; return component(); };
   return {tree: render(), render, writes, effects};
 }
 function buttons(element) {
   if (!element || typeof element !== 'object') return [];
   const children = React.Children.toArray(element.props?.children);
-  return [...(element.type === 'button' ? [element] : []), ...children.flatMap(buttons)];
+  return [...(element.type === 'button' && element.props['data-live-fixture-id'] !== undefined ? [element] : []), ...children.flatMap(buttons)];
 }
 test('Live TV renders all four leagues and states and selects each fixture independently', () => {
   for (const selected of matches) {
@@ -64,10 +66,11 @@ test('detail requests use the selected ID; cleanup rejects a late response from 
   const cleanup = view.effects[2]();
   assert.equal(url, '/api/fixture?id=103');
   cleanup();
+  const writesBeforeResponse = view.writes.length;
   assert.equal(signal.aborted, true);
   resolve(Response.json({statistics: [{team: {name: 'Previous'}}], events: []}));
   await new Promise(done => setImmediate(done));
-  assert.equal(view.writes.length, 0);
+  assert.equal(view.writes.length, writesBeforeResponse);
 });
 test('provider detail errors are displayed as unavailable, not valid statistics', async () => {
   const view = dashboard(matches[0], async () => Response.json({error: 'quota'}, {status: 503}));
@@ -238,8 +241,8 @@ test('real engine UI distinguishes missing, partial and complete provider data w
     assert.equal(html.includes('null%'),false); assert.equal(html.includes('undefined%'),false);
     assert.equal(html.includes('33%'),false); assert.equal(html.includes('34%'),false);
     if(quality==='básica') {
-      assert.ok(html.includes('No disponible / No disponible'));
-      assert.ok(html.includes('No disponible - No disponible'));
+      assert.ok(html.includes('Sin datos / Sin datos'));
+      assert.ok(html.includes('Sin datos - Sin datos'));
       assert.equal(html.includes('50% / 50%'),false);
     }
     if(quality==='avanzada') assert.ok(html.includes('estimación no calibrada'));
@@ -283,4 +286,77 @@ test('fixture details carrying another match ID are rejected before entering the
   const stop=view.effects[2]();await new Promise(resolve=>setImmediate(resolve));
   assert.ok(view.writes.some(([slot,value])=>slot===7 && value.includes('no disponibles')));
   assert.equal(view.writes.some(([slot])=>slot===9),false);stop();
+});
+
+
+test('valid statistics survive an independently reported events failure', async()=>{
+  const statistics=[{team:{name:matches[0].home},statistics:[{type:'Total Shots',value:7}]}];
+  const view=dashboard(matches[0],async()=>Response.json({fixtureId:matches[0].id,statistics,events:[],cachedAt:Date.now(),eventsError:'Eventos no disponibles temporalmente; las estadísticas sí están disponibles.'}));
+  const stop=view.effects[2]();await new Promise(resolve=>setImmediate(resolve));
+  assert.deepEqual(view.writes.find(([slot])=>slot===2)[1],statistics);
+  assert.ok(view.writes.some(([slot,value])=>slot===7&&value.startsWith('Eventos')));
+  assert.ok(view.writes.some(([slot,value])=>slot===13&&value===false));stop();
+});
+
+test('fixture details refresh on foreground without overlapping requests or retaining listeners', async()=>{
+  const listeners=new Map(), intervals=[],effects=[],values=[matches,matches[0],[],[],false,null,Date.now(),null,'12:00:00',matches[0].id,null,false,null,false];
+  let index=0,calls=0,finish;
+  const component=load('components/ui/LiveTvDashboard.tsx',{
+    react:{...React,useState:()=>{const slot=index++;return[values[slot],v=>{values[slot]=v;}];},useEffect:fn=>effects.push(fn)},
+    '@/lib/liveData':liveData,'@/lib/livePoisson':{calculateLivePoisson:()=>({})},
+  },{fetch:()=>{calls++;return new Promise(resolve=>{finish=resolve;});},setInterval:(fn,ms)=>{intervals.push({fn,ms});return 1;},clearInterval:()=>{},
+    document:{visibilityState:'visible',addEventListener:(name,fn)=>listeners.set(name,fn),removeEventListener:(name,fn)=>{assert.equal(listeners.get(name),fn);listeners.delete(name);}}}).default;
+  component();const stop=effects[2]();assert.equal(calls,1);assert.equal(intervals[0].ms,600000);
+  listeners.get('visibilitychange')();intervals[0].fn();assert.equal(calls,1);
+  finish(Response.json({fixtureId:matches[0].id,statistics:[],events:[],cachedAt:Date.now()}));await new Promise(resolve=>setImmediate(resolve));
+  listeners.get('visibilitychange')();assert.equal(calls,2);stop();assert.equal(listeners.size,0);
+  finish(Response.json({statistics:[],events:[]}));
+});
+
+
+test('initial live selection validates URL and saved IDs against the returned list',async()=>{
+  const fixtures=matches.map(match=>({fixture:{id:match.id,status:{short:match.half,elapsed:match.minuteNumber}},teams:{home:{name:match.home},away:{name:match.away}},goals:{home:0,away:0}}));
+  for(const [search,saved,expected] of [['?fixture=103','102',103],['?fixture=999','102',102],['?fixture=101&fixture=103',null,101]]){
+    const view=dashboard(null,async url=>{assert.equal(url,'/api/live');return Response.json({response:fixtures,cachedAt:Date.now()});},[],{window:{location:{search},localStorage:{getItem:()=>saved}}});
+    const stop=view.effects[1]();await new Promise(resolve=>setImmediate(resolve));
+    const update=view.writes.find(([slot])=>slot===1)[1];
+    assert.equal((typeof update==='function'?update(null):update).id,expected);
+    if(search.includes('999'))assert.ok(view.writes.find(([slot])=>slot===14)[1].includes('no está disponible'));
+    stop();
+  }
+});
+
+test('blocked Safari storage does not fail live selection or synchronization of its URL',async()=>{
+  const location={search:'?fixture=101',href:'https://local.test/live-tv?fixture=101'};let replaced;
+  const window={location,history:{state:null,replaceState:(_state,_title,url)=>{replaced=url;}}};
+  Object.defineProperty(window,'localStorage',{get(){throw Error('Storage blocked');}});
+  const fixtures=[{fixture:{id:101,status:{short:'1H',elapsed:30}},teams:{home:{name:'Home'},away:{name:'Away'}},goals:{home:0,away:0}}];
+  const view=dashboard(matches[0],async()=>Response.json({response:fixtures,cachedAt:Date.now()}),matches,{window,URL});
+  const stop=view.effects[1]();await new Promise(resolve=>setImmediate(resolve));
+  assert.ok(view.writes.some(([slot,value])=>slot===1&&(typeof value==='function'?value(null):value)?.id===101));
+  view.effects[3]();assert.equal(replaced,'/live-tv?fixture=101');stop();
+});
+
+test('manual refresh reads normal cache URLs once, shares in-flight guards and enforces cooldown',async()=>{
+  const listeners=new Map(),requests=[];
+  const document={visibilityState:'visible',addEventListener:(name,fn)=>{if(!listeners.has(name))listeners.set(name,new Set());listeners.get(name).add(fn);},removeEventListener:(name,fn)=>listeners.get(name)?.delete(fn),dispatchEvent:event=>{for(const fn of listeners.get(event.type)??[])fn();}};
+  const fixtures=matches.map(match=>({fixture:{id:match.id,status:{short:match.half,elapsed:match.minuteNumber}},teams:{home:{name:match.home},away:{name:match.away}},goals:{home:0,away:0}}));
+  const view=dashboard(matches[0],async url=>{requests.push(url);return Response.json(url==='/api/live'?{response:fixtures,cachedAt:Date.now()}:{fixtureId:101,statistics:[],events:[],cachedAt:Date.now()});},matches,{document,Event});
+  const stopLive=view.effects[1](),stopDetails=view.effects[2]();await new Promise(resolve=>setImmediate(resolve));
+  const allButtons=node=>!node||typeof node!=='object'?[]:[...(node.type==='button'?[node]:[]),...React.Children.toArray(node.props?.children).flatMap(allButtons)];
+  const refresh=()=>allButtons(view.render()).find(button=>button.props.children==='Actualizar');
+  refresh().props.onClick();refresh().props.onClick();await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(requests.filter(url=>url==='/api/live').length,2);
+  assert.equal(requests.filter(url=>url==='/api/fixture?id=101').length,2);
+  assert.equal(refresh().props.disabled,true);
+  stopLive();stopDetails();assert.equal([...listeners.values()].every(set=>set.size===0),true);
+});
+
+
+test('URL selection is revealed inside the selector without scrolling the page',()=>{
+  const target={left:600,right:800,top:600,bottom:660,width:200,height:60};
+  const rail={clientWidth:200,clientHeight:200,scrollWidth:1000,scrollHeight:200,scrollLeft:0,scrollTop:0,getBoundingClientRect:()=>({left:0,right:200,top:0,bottom:200}),querySelector:()=>({getBoundingClientRect:()=>target})};
+  const view=dashboard(matches[2],undefined,matches,{document:{querySelector:()=>rail}});
+  view.effects[4]();assert.equal(rail.scrollLeft,600);assert.equal(rail.scrollTop,0);
+  rail.scrollWidth=200;rail.scrollHeight=1000;view.effects[4]();assert.equal(rail.scrollTop,530);
 });

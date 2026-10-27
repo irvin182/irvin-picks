@@ -101,3 +101,12 @@ test('probabilities normalize and preserve symmetry over a deterministic range o
     assert.ok(result.over15>=result.over25 && result.over25>=result.over35);
   }
 });
+
+
+test('independent 5-minute live and 10-minute statistics caches explain unavailable estimates, not missing provider metrics',()=>{
+  const initial=predict(complete);assert.equal(initial.modelStatus,'estimación no calibrada');
+  const afterLiveRefresh=predict({...complete,fixtureAgeSeconds:0,statisticsAgeSeconds:300});
+  assert.equal(afterLiveRefresh.homeWin,null);assert.equal(afterLiveRefresh.missingMetrics.length,0);
+  assert.ok(afterLiveRefresh.issues.some(issue=>issue.includes('separadas')));
+  assert.equal(predict({...complete,fixtureAgeSeconds:0,statisticsAgeSeconds:0}).modelStatus,'estimación no calibrada');
+});

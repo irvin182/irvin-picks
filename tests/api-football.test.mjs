@@ -282,3 +282,29 @@ test('Free account response headers preserve actual observed usage rather than a
   await api.apiFootballFetch('https://v3.football.api-sports.io/fixtures?id=1');
   assert.equal(observed,42);assert.equal(providerLimit,100);
 });
+
+
+test('fixture isolates events failures, preserves valid statistics and caches partial coverage for 600 seconds',async()=>{
+  const statistics=[{team:{id:1},statistics:[{type:'expected_goals',value:'0.8'}]}];
+  for(const eventFailure of ['network','http','payload','json']){
+    let calls=0,ttl;const api=load('app/api/fixture/route.ts',{
+      'next/server':next,'next/cache':{unstable_cache:(fn,_keys,options)=>{ttl=options.revalidate;return fn;}},
+      'next-auth/jwt':{getToken:async()=>({role:'ADMIN'})},'@/lib/security':{rateLimit:()=>({ok:true}),getClientIp:()=> 'test'},'@/lib/supabaseAdmin':{supabaseAdmin:{}},
+      '@/lib/apiFootballFetch':{apiFootballFetch:async url=>{calls++;if(url.includes('/statistics?'))return Response.json({response:statistics,errors:[]});
+        if(eventFailure==='network')throw Error('offline');if(eventFailure==='http')return Response.json({error:'quota'},{status:429});
+        if(eventFailure==='json')return new Response('invalid JSON');return Response.json({response:[],errors:{coverage:'unavailable'}});
+      }},
+    });
+    const response=await api.GET(new Request('https://local.test/api/fixture?id=123'));const body=await response.json();
+    assert.equal(response.status,200);assert.deepEqual(body.statistics,statistics);assert.deepEqual(body.events,[]);assert.ok(body.eventsError);assert.equal(body.fixtureId,'123');assert.equal(calls,2);assert.equal(ttl,600);assert.equal(response.headers.get('cache-control'),'private, no-store');
+  }
+});
+
+test('fixture never labels a statistics provider failure as valid statistics even if events succeed',async()=>{
+  const api=load('app/api/fixture/route.ts',{
+    'next/server':next,'next/cache':{unstable_cache:fn=>fn},'next-auth/jwt':{getToken:async()=>({role:'ADMIN'})},
+    '@/lib/security':{rateLimit:()=>({ok:true}),getClientIp:()=> 'test'},'@/lib/supabaseAdmin':{supabaseAdmin:{}},
+    '@/lib/apiFootballFetch':{apiFootballFetch:async url=>Response.json(url.includes('/statistics?')?{response:[],error:'quota'}:{response:[],errors:[]})},
+  });
+  const response=await api.GET(new Request('https://local.test/api/fixture?id=123'));const body=await response.json();assert.equal(response.status,503);assert.equal('statistics' in body,false);
+});

@@ -53,3 +53,16 @@ test('mobile uses a single accessible match rail and score before selection, wit
   assert.equal((html.match(/data-live-fixture-id=/g)??[]).length,23);
   assert.ok(html.includes('data:image/svg+xml,'));
 });
+
+
+test('unavailable reasons distinguish missing provider metrics from incompatible cache timestamps',()=>{
+  const partial=renderLiveTvFixture({scenario:'partial'}).html;
+  assert.ok(partial.includes('Sin datos:'));assert.ok(partial.includes('xG visitante'));
+  const desync=renderLiveTvFixture({scenario:'desync'}).html;
+  assert.ok(desync.includes('separadas por más de un minuto'));
+  assert.equal(desync.includes('data-probability="estimated"'),false);
+  assert.ok(desync.includes('0.8 - 0.8'));
+  const absent=renderLiveTvFixture().html;
+  assert.ok(absent.includes('no contiene datos de los equipos'));
+  assert.ok(absent.includes('Sin datos / Sin datos'));
+});

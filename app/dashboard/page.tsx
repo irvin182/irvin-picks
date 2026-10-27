@@ -35,16 +35,7 @@ export default function DashboardPage() {
   const [fixtures, setFixtures] = useState<LiveFixture[]>([]);
   const [loadingLive, setLoadingLive] = useState(true);
 
-  const [livePath, setLivePath] = useState("/live-tv");
-
-useEffect(() => {
-  const ua = navigator.userAgent.toLowerCase();
-  const isMobile =
-    /iphone|android.*mobile|windows phone|ipod/.test(ua) ||
-    (window.innerWidth < 768 && navigator.maxTouchPoints > 0);
-
-  setLivePath(isMobile ? "/live" : "/live-tv");
-}, []);
+  const livePath = "/live-tv";
 
   useEffect(() => {
     let mounted = true;
@@ -230,7 +221,7 @@ useEffect(() => {
             <Card
               title="📺 LIVE TV"
               text="Pantalla grande para seguir partidos, IA, momentum, estadísticas y eventos."
-              href="/live"
+              href="/live-tv"
               button="ENTRAR AL LIVE"
               featured
             />

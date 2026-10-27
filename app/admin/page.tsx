@@ -474,7 +474,7 @@ Nueva contraseña: ${newPassword}`
   </Link>
 
 <Link
-  href="/live/live-mobile"
+  href="/live-tv"
   className="rounded-2xl bg-green-500/15 text-green-400 font-black px-4 py-3 border border-green-500/30 hover:bg-green-500 hover:text-black transition"
 >
   🤖 IA LIVE

@@ -8,17 +8,28 @@ import { unstable_cache } from "next/cache";
 const loadFixture = (fixtureId: string) => unstable_cache(async () => {
   const API_KEY = process.env.APIFOOTBALL_KEY;
   if (!API_KEY) throw new Error("Falta APIFOOTBALL_KEY");
-  const [statisticsRes, eventsRes] = await Promise.all([
-    apiFootballFetch(`https://v3.football.api-sports.io/fixtures/statistics?fixture=${fixtureId}`, { headers: { "x-apisports-key": API_KEY }, cache: "no-store", signal: AbortSignal.timeout(12000) }),
-    apiFootballFetch(`https://v3.football.api-sports.io/fixtures/events?fixture=${fixtureId}`, { headers: { "x-apisports-key": API_KEY }, cache: "no-store", signal: AbortSignal.timeout(12000) }),
-  ]);
-  if (!statisticsRes.ok || !eventsRes.ok) throw new Error("API-Football no disponible");
-  const [statisticsJson, eventsJson] = await Promise.all([statisticsRes.json(), eventsRes.json()]);
-  if (!Array.isArray(statisticsJson?.response) || !Array.isArray(eventsJson?.response) || Object.keys(statisticsJson?.errors ?? {}).length || Object.keys(eventsJson?.errors ?? {}).length) throw new Error("API-Football ha rechazado la consulta");
+  // Events and statistics have independent coverage/failure modes. A rejected
+  // events request must never discard valid statistics or become fake event data.
+  async function readProvider(path: string) {
+    const response = await apiFootballFetch(`https://v3.football.api-sports.io/fixtures/${path}?fixture=${fixtureId}`, {
+      headers: { "x-apisports-key": API_KEY! }, cache: "no-store", signal: AbortSignal.timeout(12000),
+    });
+    if (!response.ok) throw new Error("API-Football no disponible");
+    const payload = await response.json();
+    if (!Array.isArray(payload?.response) || payload.error || Object.keys(payload?.errors ?? {}).length) {
+      throw new Error("API-Football ha rechazado la consulta");
+    }
+    return payload;
+  }
+  const [statistics, events] = await Promise.allSettled([readProvider("statistics"), readProvider("events")]);
+  if (statistics.status === "rejected") throw new Error("Estadísticas no disponibles");
+  const statisticsJson = statistics.value;
+  const eventsJson = events.status === "fulfilled" ? events.value : null;
   return {
     fixtureId,
     statistics: Array.isArray(statisticsJson?.response) ? statisticsJson.response : [],
-    events: Array.isArray(eventsJson?.response) ? eventsJson.response : [],
+    events: eventsJson?.response ?? [],
+    eventsError: eventsJson ? null : "Eventos no disponibles temporalmente; las estadísticas sí están disponibles.",
     rawStatisticsErrors: statisticsJson?.errors ?? null,
     rawEventsErrors: eventsJson?.errors ?? null,
     cached: true,
@@ -100,7 +111,7 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    return NextResponse.json(await loadFixture(fixtureId)());
+    return NextResponse.json(await loadFixture(fixtureId)(), { headers: { "Cache-Control": "private, no-store" } });
   } catch {
     return NextResponse.json({ fixtureId, error: "Error cargando detalles del partido" }, { status: 503, headers: { "Retry-After": "300" } });
   }

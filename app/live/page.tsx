@@ -1,17 +1,8 @@
-"use client";
+import { redirect } from "next/navigation";
+import { legacyLiveDestination } from "@/lib/liveNavigation";
 
-import dynamic from "next/dynamic";
-import AuthGuard from "@/components/ui/AuthGuard";
+type SearchParams = Record<string, string | string[] | undefined>;
 
-const LiveTvMobile = dynamic(
-  () => import("@/components/ui/LiveTvMobile"),
-  { ssr: false }
-);
-
-export default function Page() {
-  return (
-    <AuthGuard>
-      <LiveTvMobile />
-    </AuthGuard>
-  );
+export default async function Page({ searchParams }: { searchParams: Promise<SearchParams> }) {
+  redirect(legacyLiveDestination(await searchParams));
 }

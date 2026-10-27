@@ -171,3 +171,22 @@
   .teamBlock[data-side="away"] { grid-column: 3; grid-row: 1; }
   .score { font-size: 2.5rem; }
 }
+
+.dataNotice { margin: 0; padding: 12px 14px; border: 1px solid #36536d; border-radius: 12px; background: #0c2032; color: #c0d1e2; font-size: .85rem; line-height: 1.6; overflow-wrap: anywhere; min-width: 0; }
+
+/* One canonical terminal: league groups share the existing horizontal mobile rail. */
+.refreshButton { min-height: 44px; min-width: 100px; padding: 10px 14px; border: 1px solid #358665; border-radius: 12px; background: #103827; color: #70ffad !important; cursor: pointer; font-weight: 700 !important; }
+.refreshButton:disabled { opacity: .55; cursor: default; }
+.refreshButton:focus-visible { outline: 2px solid var(--terminal-green); outline-offset: 3px; }
+.matchGroup { min-width: 0; display: grid; gap: 10px; }
+.matchGroupGames { min-width: 0; display: grid; gap: 8px; }
+.leagueHeading { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 8px 2px; color: #a7c5e1; font-size: .75rem; }
+.leagueHeading img { flex: 0 0 24px; }
+.leagueHeading > span:first-of-type { min-width: 0; overflow-wrap: anywhere; }
+.leagueHeading > span:last-child { color: var(--terminal-green); margin-left: auto; flex: 0 0 auto; }
+@media (max-width: 959px) {
+  .matchGroup { flex: 0 0 auto; display: flex; flex-direction: column; }
+  .matchGroupGames { display: flex; gap: 10px; flex: 1; }
+  .matchGroup .matchButton { width: min(78vw, 280px); }
+  .leagueHeading { width: min(78vw, 280px); }
+}

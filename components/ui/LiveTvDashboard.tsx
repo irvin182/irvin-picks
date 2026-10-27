@@ -2,6 +2,7 @@
 
 import styles from "./LiveTvDashboard.module.css";
 import React, { useEffect, useState } from "react";
+import { chooseLiveFixture, requestedFixture, parseFixtureId, SELECTED_MATCH_STORAGE_KEY, LIVE_REFRESH_EVENT } from "@/lib/liveNavigation";
 import { calculateLivePoisson } from "@/lib/livePoisson";
 import { readLiveStat as getStat, liveValue, type FixtureStatistics } from "@/lib/liveData";
 
@@ -10,6 +11,8 @@ type Match = {
   minuteNumber: number | null;
   half: string;
   league: string;
+  leagueId?: number;
+  leagueLogo?: string;
   country: string;
   homeId?: number;
   awayId?: number;
@@ -24,7 +27,7 @@ type Match = {
 
 type ApiFixture = {
   fixture: { id: number; status?: { elapsed?: number | null; short?: string } };
-  league?: { name?: string; country?: string };
+  league?: { id?: number; name?: string; country?: string; logo?: string };
   teams?: { home?: { id?: number; name?: string; logo?: string }; away?: { id?: number; name?: string; logo?: string } };
   goals?: { home?: number | null; away?: number | null };
 };
@@ -42,6 +45,8 @@ function mapApiFixtureToMatch(fx: ApiFixture): Match {
     minuteNumber: fx.fixture?.status?.elapsed ?? null,
     half: fx.fixture?.status?.short ?? "LIVE",
     league: fx.league?.name ?? "Liga",
+    leagueId: fx.league?.id,
+    leagueLogo: fx.league?.logo,
     country: fx.league?.country ?? "World",
     homeId: fx.teams?.home?.id,
     awayId: fx.teams?.away?.id,
@@ -58,6 +63,10 @@ function mapApiFixtureToMatch(fx: ApiFixture): Match {
 function getLiveMinute(match: Match) {
   if (["HT", "FT"].includes(match.half)) return match.half;
   return liveValue(match.minuteNumber, "'");
+}
+
+function statValue(value: number | null, suffix = "") {
+  return value === null ? "Sin datos" : liveValue(value, suffix);
 }
 
 function eventIcon(type: string) {
@@ -81,6 +90,9 @@ export default function LiveTvDashboard() {
   const [statsCachedAt, setStatsCachedAt] = useState<number | null>(null);
   const [liveStale, setLiveStale] = useState(false);
   const [liveCachedAt, setLiveCachedAt] = useState<number | null>(null);
+  const [detailsLoading, setDetailsLoading] = useState(false);
+  const [selectionNotice, setSelectionNotice] = useState<string | null>(null);
+  const [lastManualRefresh, setLastManualRefresh] = useState(0);
   const fixtureStats = detailsId === selected?.id ? receivedStats : [];
   const fixtureEvents = detailsId === selected?.id ? receivedEvents : [];
 
@@ -92,6 +104,12 @@ export default function LiveTvDashboard() {
   useEffect(() => {
     let active = true;
     let pending = false;
+    let firstSelection = true;
+    const requested = typeof window === "undefined" ? { requested: false, id: null } : requestedFixture(window.location.search);
+    let savedId: number | null = null;
+    try {
+      if (typeof window !== "undefined") savedId = parseFixtureId(window.localStorage.getItem(SELECTED_MATCH_STORAGE_KEY));
+    } catch { /* Storage can be blocked in private browsing; live analysis still works. */ }
     async function loadLive() {
       if (pending || !active) return;
       pending = true;
@@ -102,7 +120,7 @@ export default function LiveTvDashboard() {
 
         if (!res.ok || (data?.errors && Object.keys(data.errors).length > 0) || data?.error || !Array.isArray(data?.response)) {
           setLiveStale(true);
-        const message = res.status === 429
+          const message = res.status === 429
             ? "Límite de API-Football alcanzado. Espera a que se renueve la cuota."
             : `No se pueden cargar los partidos (HTTP ${res.status}). Comprueba API-Football.`;
           setLiveError(message);
@@ -110,20 +128,26 @@ export default function LiveTvDashboard() {
           return;
         }
         setLiveStale(Boolean(data.stale));
-    setLiveCachedAt(typeof data.cachedAt === "number" ? data.cachedAt : null);
+        setLiveCachedAt(typeof data.cachedAt === "number" ? data.cachedAt : null);
         setTick(Date.now());
         setLiveError(data.stale ? "La actualización está pendiente o no está disponible; se muestra la última captura válida." : null);
-        const liveGames = Array.isArray(data.response)
+        const liveGames: Match[] = Array.isArray(data.response)
           ? data.response.map(mapApiFixtureToMatch)
           : [];
 
         setMatches(liveGames);
 
+        const initial = firstSelection;
+        if (initial && requested.requested) {
+          setSelectionNotice(requested.id === null
+            ? "El identificador del enlace no es válido; se muestra un partido disponible."
+            : !liveGames.some((match: Match) => match.id === requested.id)
+              ? "El partido del enlace no está disponible en la lista en directo; se muestra otro encuentro si existe."
+              : null);
+        }
         if (liveGames.length > 0) {
-          setSelected((current) => {
-            if (!current) return liveGames[0];
-            return liveGames.find((m: Match) => m.id === current.id) ?? liveGames[0];
-          });
+          firstSelection = false;
+          setSelected(current => chooseLiveFixture(liveGames, current?.id, initial ? requested.id : null, initial ? savedId : null));
         } else {
           setSelected(null);
         }
@@ -148,8 +172,10 @@ export default function LiveTvDashboard() {
     const onVisible = () => {
       if (document.visibilityState === "visible") void loadLive();
     };
+    const onManualRefresh = () => { void loadLive(); };
     document.addEventListener("visibilitychange", onVisible);
-    return () => { active = false; clearInterval(interval); document.removeEventListener("visibilitychange", onVisible); };
+    document.addEventListener(LIVE_REFRESH_EVENT, onManualRefresh);
+    return () => { active = false; clearInterval(interval); document.removeEventListener("visibilitychange", onVisible); document.removeEventListener(LIVE_REFRESH_EVENT, onManualRefresh); };
   }, []);
 
   const selectedId = selected?.id;
@@ -157,19 +183,23 @@ export default function LiveTvDashboard() {
     if (!selectedId) return;
     const controller = new AbortController();
     let active = true;
+    let pending = false;
 
     async function loadFixtureDetails() {
+      if (!active || pending) return;
+      pending = true;
+      setDetailsLoading(true);
       try {
         const res = await fetch(`/api/fixture?id=${selectedId}`, {
           cache: "no-store", signal: controller.signal,
         });
         const data = await res.json();
         if (!active) return;
-        if (!res.ok || data.error || !Array.isArray(data.statistics) || !Array.isArray(data.events) ||
+        if (!res.ok || data.error || (data.errors && Object.keys(data.errors).length > 0) || !Array.isArray(data.statistics) || !Array.isArray(data.events) ||
             (data.fixtureId !== undefined && String(data.fixtureId) !== String(selectedId))) {
           throw new Error("Estadísticas no disponibles temporalmente.");
         }
-        setDetailsError(null);
+        setDetailsError(typeof data.eventsError === "string" ? data.eventsError : null);
         setDetailsId(selectedId ?? null);
         setStatsCachedAt(typeof data.cachedAt === "number" ? data.cachedAt : null);
         setTick(Date.now());
@@ -180,6 +210,9 @@ export default function LiveTvDashboard() {
         setFixtureStats([]);
         setFixtureEvents([]);
         setDetailsError("Estadísticas no disponibles temporalmente.");
+      } finally {
+        pending = false;
+        if (active) setDetailsLoading(false);
       }
     }
 
@@ -187,14 +220,54 @@ export default function LiveTvDashboard() {
     const interval = setInterval(() => {
       if (document.visibilityState === "visible") loadFixtureDetails();
     }, 600000);
-    return () => { active = false; controller.abort(); clearInterval(interval); };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void loadFixtureDetails();
+    };
+    const onManualRefresh = () => { void loadFixtureDetails(); };
+    document.addEventListener("visibilitychange", onVisible);
+    document.addEventListener(LIVE_REFRESH_EVENT, onManualRefresh);
+    return () => { active = false; controller.abort(); clearInterval(interval); document.removeEventListener("visibilitychange", onVisible); document.removeEventListener(LIVE_REFRESH_EVENT, onManualRefresh); };
+
   }, [selectedId]);
+
+  useEffect(() => {
+    if (!selectedId || typeof window === "undefined") return;
+    try { window.localStorage.setItem(SELECTED_MATCH_STORAGE_KEY, String(selectedId)); } catch { /* Optional preference. */ }
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set("fixture", String(selectedId));
+      window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+    } catch { /* A restricted history API must not interrupt analysis. */ }
+  }, [selectedId]);
+
+  useEffect(() => {
+    if (!selectedId) return;
+    const rail = document.querySelector<HTMLElement>("[data-live-match-list]");
+    const button = rail?.querySelector<HTMLElement>(`[data-live-fixture-id="${selectedId}"]`);
+    if (!rail || !button) return;
+    const bounds = rail.getBoundingClientRect(), target = button.getBoundingClientRect();
+    // Reveal only inside the selector; never move the page away from the scoreboard.
+    if (rail.scrollWidth > rail.clientWidth && (target.left < bounds.left || target.right > bounds.right)) {
+      rail.scrollLeft += target.left - bounds.left - (rail.clientWidth - target.width) / 2;
+    } else if (rail.scrollHeight > rail.clientHeight && (target.top < bounds.top || target.bottom > bounds.bottom)) {
+      rail.scrollTop += target.top - bounds.top - (rail.clientHeight - target.height) / 2;
+    }
+  }, [selectedId]);
+
+  function manualRefresh() {
+    if (Date.now() - lastManualRefresh < 30000) return;
+    setLastManualRefresh(Date.now());
+    // Reads the existing endpoints; no cache-busting query or provider refresh flag.
+    document.dispatchEvent(new Event(LIVE_REFRESH_EVENT));
+  }
 
   function selectMatch(match: Match) {
     if (match.id === selectedId) return;
     setFixtureStats([]);
     setFixtureEvents([]);
     setDetailsError(null);
+    setDetailsLoading(true);
+    setSelectionNotice(null);
     setSelected(match);
   }
 
@@ -217,6 +290,9 @@ export default function LiveTvDashboard() {
   const homeXg = getStat(fixtureStats, selectedMatch.homeId ?? selectedMatch.home, "expected_goals");
   const awayXg = getStat(fixtureStats, selectedMatch.awayId ?? selectedMatch.away, "expected_goals");
 
+  const homeCorners = getStat(fixtureStats, selectedMatch.homeId ?? selectedMatch.home, "Corner Kicks");
+  const awayCorners = getStat(fixtureStats, selectedMatch.awayId ?? selectedMatch.away, "Corner Kicks");
+
   const prediction: Prediction = calculateLivePoisson({
     homeScore: selectedMatch.homeScore,
     awayScore: selectedMatch.awayScore,
@@ -235,6 +311,25 @@ export default function LiveTvDashboard() {
 
   const dataQuality = prediction.dataQuality ?? "insuficiente";
   const settled = prediction.settled ?? [];
+  const missingLabels: Record<string, string> = {
+    homeShots: "tiros local", awayShots: "tiros visitante", homeShotsOn: "tiros a puerta local", awayShotsOn: "tiros a puerta visitante",
+    homePossession: "posesión local", awayPossession: "posesión visitante", homeXg: "xG local", awayXg: "xG visitante",
+  };
+  const missing = (prediction.missingMetrics ?? []).map(key => missingLabels[key] ?? key);
+  const unavailableReason = detailsLoading
+    ? "Actualizando estadísticas del partido seleccionado."
+    : detailsId !== selectedMatch.id || fixtureStats.length === 0
+      ? detailsError ?? "La respuesta de estadísticas no contiene datos de los equipos de este partido."
+      : prediction.modelStatus === "no evaluable"
+        ? [missing.length ? `Sin datos: ${missing.join(", ")}.` : "", ...(prediction.issues ?? [])].filter(Boolean).join(" ")
+        : null;
+
+  const groups = new Map<string, {name: string; logo?: string; matches: Match[]}>();
+  for (const match of matches) {
+    const key = match.leagueId == null ? `${match.country}:${match.league}` : String(match.leagueId);
+    if (!groups.has(key)) groups.set(key, {name: `${match.country} · ${match.league}`, logo: match.leagueLogo, matches: []});
+    groups.get(key)!.matches.push(match);
+  }
 
   return (
     <main className={styles.page}>
@@ -245,6 +340,9 @@ export default function LiveTvDashboard() {
             <span className={styles.liveBadge}>● {matches.length} partidos en vivo</span>
             <span className={styles.qualityBadge}>Datos: {dataQuality}</span>
             <span className={styles.timestamp}>Última captura <strong>{lastUpdate}</strong></span>
+            <button type="button" className={styles.refreshButton} onClick={manualRefresh}
+              disabled={loading || detailsLoading || (lastManualRefresh > 0 && tick - lastManualRefresh < 30000)}
+              title="Lee la captura disponible respetando los intervalos de actualización">Actualizar</button>
           </div>
         </header>
 
@@ -254,26 +352,35 @@ export default function LiveTvDashboard() {
           </div>
           <aside className={styles.matchPanel} aria-label="Selector de partidos">
             <div className={styles.panelHeading}><h2>Partidos en vivo</h2><span>{matches.length}</span></div>
+            {selectionNotice && <p className={styles.alert} role="status">{selectionNotice}</p>}
             {liveError && <p className={styles.alert} role="alert">{liveError} Se conserva la última lista recibida.</p>}
-            <div className={styles.matchList} role="region" aria-label="Partidos disponibles; desplaza para ver más" tabIndex={0}>
-              {matches.map(m => <button key={m.id} type="button" onClick={() => selectMatch(m)} aria-pressed={selectedMatch.id === m.id} data-live-fixture-id={m.id}
+            <div className={styles.matchList} data-live-match-list role="region" aria-label="Partidos disponibles; desplaza para ver más" tabIndex={0}>
+              {[...groups.entries()].map(([key, group]) => <section className={styles.matchGroup} key={key} aria-label={group.name}>
+                <h3 className={styles.leagueHeading}>{group.logo && <img src={group.logo} alt="" width={24} height={24} />}<span>{group.name}</span><span>{group.matches.length}</span></h3>
+                <div className={styles.matchGroupGames}>
+              {group.matches.map(m => <button key={m.id} type="button" onClick={() => selectMatch(m)} aria-pressed={selectedMatch.id === m.id} data-live-fixture-id={m.id}
                 className={`${styles.matchButton} ${selectedMatch.id === m.id ? styles.selectedMatch : ""}`}>
                 <span className={styles.matchMeta}><span>{getLiveMinute(m)}</span><span>{liveValue(m.homeScore)} – {liveValue(m.awayScore)}</span></span>
                 <span className={styles.matchTeam}>{m.homeFlag && <img src={m.homeFlag} alt="" width={20} height={20} />}<span>{m.home}</span></span>
                 <span className={styles.matchTeam}>{m.awayFlag && <img src={m.awayFlag} alt="" width={20} height={20} />}<span>{m.away}</span></span>
                 <span className={styles.matchLeague}>{m.country} · {m.league}</span>
               </button>)}
+                </div>
+              </section>)}
             </div>
           </aside>
 
-          <section className={styles.analysis} aria-label="Análisis del partido seleccionado">
+          <section className={styles.analysis} aria-label="Análisis del partido seleccionado" aria-busy={detailsLoading || (detailsId !== selectedMatch.id && !detailsError)}>
             {detailsError && <p className={styles.alert} role="alert">{detailsError}</p>}
+            {unavailableReason && <p className={styles.dataNotice} role="status">{unavailableReason}</p>}
             <div className={styles.summaryLine} role="status"><span className={styles.qualityBadge}>Calidad {dataQuality}</span><span>Confianza no evaluable</span></div>
 
             <div className={styles.metricsGrid}>
-              <MetricCard title="xG del proveedor" value={`${liveValue(homeXg)} - ${liveValue(awayXg)}`} missing={homeXg == null || awayXg == null} note="Estimación del proveedor" />
-              <MetricCard title="Posesión" value={`${liveValue(homePossession, "%")} / ${liveValue(awayPossession, "%")}`} missing={homePossession == null || awayPossession == null} note="Local / Visitante" />
-              <MetricCard title="Tiros totales" value={`${liveValue(homeShots)} - ${liveValue(awayShots)}`} missing={homeShots == null || awayShots == null} note="Local / Visitante" />
+              <MetricCard title="xG del proveedor" value={`${statValue(homeXg)} - ${statValue(awayXg)}`} missing={homeXg == null || awayXg == null} note="Estimación del proveedor" />
+              <MetricCard title="Posesión" value={`${statValue(homePossession, "%")} / ${statValue(awayPossession, "%")}`} missing={homePossession == null || awayPossession == null} note="Local / Visitante" />
+              <MetricCard title="Tiros totales" value={`${statValue(homeShots)} - ${statValue(awayShots)}`} missing={homeShots == null || awayShots == null} note="Local / Visitante" />
+              <MetricCard title="Tiros a puerta" value={`${statValue(homeShotsOn)} - ${statValue(awayShotsOn)}`} missing={homeShotsOn == null || awayShotsOn == null} note="Local / Visitante" />
+              <MetricCard title="Córners" value={`${statValue(homeCorners)} - ${statValue(awayCorners)}`} missing={homeCorners == null || awayCorners == null} note="Local / Visitante" />
             </div>
 
             <div className={styles.sectionTitle}><span className={styles.sectionIndex}>01</span><h2 className={styles.sectionHeading}>Mercados del partido</h2><span className={styles.sectionCaption}>Lectura estadística</span></div>
