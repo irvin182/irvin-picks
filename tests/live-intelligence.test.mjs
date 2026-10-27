@@ -110,3 +110,11 @@ test('independent 5-minute live and 10-minute statistics caches explain unavaila
   assert.ok(afterLiveRefresh.issues.some(issue=>issue.includes('separadas')));
   assert.equal(predict({...complete,fixtureAgeSeconds:0,statisticsAgeSeconds:0}).modelStatus,'estimación no calibrada');
 });
+
+ test('malformed rows and metric entries cannot crash or conceal valid statistics from the other team', () => {
+  const rows=[null,{team:{id:1},statistics:{}},{team:{id:2},statistics:[null,{type:'Total Shots',value:0},{type:'Corner Kicks',value:3}]}];
+  assert.equal(readLiveStat(rows,1,'Total Shots'),null);
+  assert.equal(readLiveStat(rows,2,'Total Shots'),0);
+  assert.equal(readLiveStat(rows,2,'Corner Kicks'),3);
+  assert.equal(readLiveStat(rows,999,'Corner Kicks'),null);
+ });

@@ -330,12 +330,15 @@ export default function InformeHoy() {
   });
 
   const cancelRef = useRef(false);
+  const inFlightParts = useRef(new Set<string>());
+  const completedParts = useRef(new Set<string>());
 
   async function loadFixtures() {
     try {
       setLoading(true);
       setStatus(`Cargando partidos del ${selectedDate}…`);
       setParts({});
+      completedParts.current.clear();
       cancelRef.current = false;
 
       const data = await apiGet("fixtures", { date: selectedDate });
@@ -388,10 +391,13 @@ async function handleGeneratePart(league: LeagueGroup, partIndex: number) {
   const key = `${league.leagueId}-${partIndex}`;
   const existing = parts[key];
 
-  if (existing && !existing.loading && existing.rows.length > 0) return;
+  const runKey = `${selectedDate}:${key}`;
+  if (inFlightParts.current.has(runKey) || completedParts.current.has(runKey)) return;
 
   const start = partIndex * CHUNK_SIZE;
   const slice = league.fixtures.slice(start, start + CHUNK_SIZE);
+  if (existing && !existing.loading && existing.rows.length + existing.omitted.length === slice.length) return;
+  inFlightParts.current.add(runKey);
 
   setParts((prev) => ({
     ...prev,
@@ -414,7 +420,7 @@ async function handleGeneratePart(league: LeagueGroup, partIndex: number) {
         lambdaCache.set(f.fixture.id, L);
       }
 
-      if (L.meta.source === "generic_fallback" || L.meta.source === "error") {
+  if (L.meta.source === "generic_fallback" || L.meta.source === "error") {
         L = {
           lambdaHome: 1.2,
           lambdaAway: 1.0,
@@ -497,10 +503,13 @@ async function handleGeneratePart(league: LeagueGroup, partIndex: number) {
 
   const CONCURRENCY = 1;
 
+  try {
   for (let i = 0; i < slice.length; i += CONCURRENCY) {
     const batch = slice.slice(i, i + CONCURRENCY);
+    const needsCalculation = batch.some(f => !lambdaCache.get(f.fixture.id));
     await Promise.all(batch.map(processFixture));
-    await sleep(1200);
+    // Keep pacing for every new calculation; cached results only yield to the UI.
+    await sleep(needsCalculation ? 1200 : 0);
   }
 
   rows.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
@@ -513,6 +522,10 @@ async function handleGeneratePart(league: LeagueGroup, partIndex: number) {
       omitted,
     },
   }));
+  completedParts.current.add(runKey);
+  } finally {
+    inFlightParts.current.delete(runKey);
+  }
 }
 
 
@@ -578,7 +591,7 @@ async function handleGeneratePart(league: LeagueGroup, partIndex: number) {
   const start = idx * CHUNK_SIZE;
 const slice = lg.fixtures.slice(start, start + CHUNK_SIZE);
 
-if (!part || part.rows.length < slice.length) {
+if (!completedParts.current.has(`${selectedDate}:${key}`) && (!part || (!part.loading && part.rows.length + part.omitted.length < slice.length))) {
   allKeys.push({ lg, idx });
 }
     }
@@ -923,7 +936,7 @@ if (!part || part.rows.length < slice.length) {
         </div>
 
         {/* PDF ANÁLISIS */}
-        <div className={printMode === "analysis" ? "block print:block" : "hidden print:hidden"}>
+        {printMode === "analysis" && <div className="block print:block">
           <div className="pdf-header">
             <img src="/logo-irvin.png" alt="Irvin Analytics" />
 
@@ -1037,10 +1050,10 @@ if (!part || part.rows.length < slice.length) {
               </section>
             );
           })}
-        </div>
+        </div>}
 
         {/* PDF EN VIVO */}
-        <div className={printMode === "live" ? "block print:block" : "hidden print:hidden"}>
+        {printMode === "live" && <div className="block print:block">
           
           <div className="bg-black text-white px-3 py-2 mb-2 rounded-lg border border-white/10">
             <div className="flex items-center gap-2">
@@ -1196,7 +1209,7 @@ if (!part || part.rows.length < slice.length) {
               </section>
             );
           })}
-        </div>
+        </div>}
       </main>
     </div>
   );

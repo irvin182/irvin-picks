@@ -12,8 +12,10 @@ export function liveNumber(value: unknown): number | null {
 }
 
 export function readLiveStat(stats: FixtureStatistics[], team: string | number, name: string) {
-  const row = stats.find(item => typeof team === "number" ? item.team?.id === team : item.team?.name === team);
-  const raw = row?.statistics?.find(item => item.type === name)?.value;
+  const row = stats.find(item => typeof team === "number" ? item?.team?.id === team : item?.team?.name === team);
+  const raw = Array.isArray(row?.statistics)
+    ? row.statistics.find(item => item?.type === name)?.value
+    : undefined;
   if (name !== "Ball Possession" && typeof raw === "string" && raw.includes("%")) return null;
   const value = liveNumber(raw);
   if (value === null || (name === "Ball Possession" && value > 100)) return null;

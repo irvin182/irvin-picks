@@ -1,0 +1,15 @@
+import fs from 'node:fs';
+import {performance} from 'node:perf_hooks';
+import {createHash} from 'node:crypto';
+import {renderToStaticMarkup} from 'react-dom/server';
+import {createReportHarness,reportPath} from '../tests/helpers/today-report-harness.mjs';
+const source=fs.readFileSync(process.argv[2]??reportPath,'utf8');
+const h=createReportHarness({source});
+const started=performance.now();await h.buttons('Iniciar análisis')[0].props.onClick();const analysisMs=performance.now()-started;
+const countTags=html=>(html.match(/<[a-z][^>]*>/g)??[]).length;
+const times=[];let html;for(let i=0;i<7;i++){const t=performance.now();html=h.html();times.push(performance.now()-t);}times.sort((a,b)=>a-b);
+const pdfStart=performance.now();h.buttons('Descargar PDF')[0].props.onClick();const pdfMs=performance.now()-pdfStart;
+const printHashes={};for(const mode of ['analysis','live']){h.values[0]=mode;const block=h.nodes().find(n=>n.type==='div'&&n.props.className==='block print:block');printHashes[mode]=createHash('sha256').update(renderToStaticMarkup(block)).digest('hex');}h.values[0]=null;
+const report={tableDigest:createHash('sha256').update(JSON.stringify(h.tables)).digest('hex'),printHashes,synthetic:true,fixtures:h.values[2].length,blocks:Object.keys(h.values[5]).length,analysisLocalMs:analysisMs,simulatedWaitMs:h.delays.reduce((a,b)=>a+b,0),computeCalls:h.computeIds.length,renderMedianMs:times[3],domElements:countTags(html),htmlBytes:Buffer.byteLength(html),pdfMs,pdfBytes:h.pdfs[0]?.bytes,pdfTables:h.tables.length,pdfRows:h.tables.reduce((sum,t)=>sum+t.body.length,0)};
+const againStart=h.delays.length;await h.buttons('Iniciar análisis')[0].props.onClick();report.repeatWaitMs=h.delays.slice(againStart).reduce((a,b)=>a+b,0);
+h.remount();const warmStart=h.delays.length;const callsBeforeWarm=h.computeIds.length;await h.buttons('Iniciar análisis')[0].props.onClick();report.warmCacheWaitMs=h.delays.slice(warmStart).reduce((a,b)=>a+b,0);report.warmCacheNewComputations=h.computeIds.length-callsBeforeWarm;console.log(JSON.stringify(report,null,2));
