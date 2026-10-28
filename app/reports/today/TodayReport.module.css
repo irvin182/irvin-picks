@@ -13,3 +13,7 @@
 @media(max-width:350px){.screen{padding:18px 11px 30px}.heading h1{font-size:26px}.match{padding:13px}.teams{font-size:12px}.markets{gap:10px}.markets strong{font-size:25px}.marketTitle{font-size:7px}.marketTitle span{font-size:6px}.export>.sectionTitle{gap:8px}.export>.sectionTitle h2{font-size:11px}.brand>small{display:none}}
 
 .teams{align-items:center}.teams>span{min-height:0}@media(min-width:761px){.teams{min-height:56px;margin:16px 0}.marketTitle{margin-bottom:7px}.partHeader button{background:transparent}}
+/* Final reference alignment: compact cards, with model labels retained by the markets. */
+.marketTitle{display:none}.match{padding:17px 19px 14px}.teams{min-height:50px;margin:13px 0}.goals{margin:13px 0 10px;padding:11px 0}.reason{margin-top:7px}.screen button{transition:none}
+@media(max-width:760px){.match{padding:15px}.teams{min-height:72px;margin:13px 0}.goals{margin:13px 0 10px;padding:11px 0}}
+@media(max-width:350px){.match{padding:13px}}
